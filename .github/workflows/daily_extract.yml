@@ -15,6 +15,7 @@ jobs:
     name: Extract Freelance Missions
     runs-on: ubuntu-latest
     timeout-minutes: 30  # Hard limit — prevents runaway Apify polling
+    environment: APIFY_API_TOKEN  # GitHub environment where secrets are stored
 
     steps:
       - name: Checkout repository
