@@ -1,0 +1,22 @@
+# Environment secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Runtime output (keep .gitkeep placeholders, ignore actual content)
+data/*.json
+logs/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

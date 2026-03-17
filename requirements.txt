@@ -1,0 +1,18 @@
+# Apify scraping
+apify-client==1.8.1
+
+# Claude AI scoring
+anthropic==0.40.0
+
+# LinkedIn profile fetching + HTML parsing
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# Google Sheets
+google-api-python-client==2.155.0
+google-auth==2.37.0
+google-auth-httplib2==0.2.0
+
+# Local dev only — no-op in GitHub Actions
+python-dotenv==1.0.1

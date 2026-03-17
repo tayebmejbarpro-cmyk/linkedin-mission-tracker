@@ -1,0 +1,15 @@
+{
+  "MY_LINKEDIN_URL": "https://www.linkedin.com/in/mohamed-sid-ahmed/",
+  "TARGET_COUNTRIES": ["France", "Morocco"],
+  "SEARCH_KEYWORDS": [
+    "mission freelance",
+    "recherche freelance",
+    "freelance consultant",
+    "mission consultant indépendant",
+    "besoin freelance",
+    "TJM freelance"
+  ],
+  "MIN_MATCH_SCORE": 40,
+  "MAX_POSTS_PER_COUNTRY": 50,
+  "SHEET_TAB_FORMAT": "Missions_{YYYY-MM}"
+}

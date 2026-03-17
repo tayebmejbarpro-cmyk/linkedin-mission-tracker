@@ -1,0 +1,54 @@
+name: Daily LinkedIn Freelance Mission Extract
+
+on:
+  schedule:
+    # 06:00 UTC daily = 08:00 CEST (summer) / 07:00 CET (winter)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Allows manual trigger from the GitHub Actions UI for testing
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  extract:
+    name: Extract Freelance Missions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # Hard limit — prevents runaway Apify polling
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'  # Caches pip deps between runs (~5s vs ~60s install time)
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run extraction pipeline
+        env:
+          APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: python run.py
+
+      - name: Upload run logs
+        if: always()  # Upload even if the pipeline step failed — critical for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+
+      - name: Upload raw scraped data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-data-${{ github.run_id }}
+          path: data/
+          retention-days: 7
