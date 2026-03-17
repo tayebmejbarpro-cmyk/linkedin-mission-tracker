@@ -1,5 +1,5 @@
 # Apify scraping
-apify-client==1.8.1
+apify-client>=1.9.0
 
 # Claude AI scoring
 anthropic==0.40.0
