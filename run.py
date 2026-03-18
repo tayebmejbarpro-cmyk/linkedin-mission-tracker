@@ -98,13 +98,18 @@ def main() -> None:
         from config.config import load_config
         from scraper import scrape_all_countries
         from matcher import score_posts
-        from sheets import write_missions
+        from sheets import write_missions, sync_config_tab
 
         # Step 1 — Config (fail fast)
         logger.info("[run] Loading configuration...")
         config = load_config()
+
+        # Step 1b — Override config with Paramètres tab values (if tab exists)
+        logger.info("[run] Syncing config with Google Sheets 'Paramètres' tab...")
+        config = sync_config_tab(config, logger)
+
         logger.info(
-            "[run] Config loaded. Countries: %s | Keywords: %d | Min score: %d",
+            "[run] Config ready. Countries: %s | Keywords: %d | Min score: %d",
             config.target_countries,
             len(config.search_keywords),
             config.min_match_score,
