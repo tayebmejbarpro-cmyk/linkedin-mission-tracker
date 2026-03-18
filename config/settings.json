@@ -1,5 +1,7 @@
 {
-  "MY_LINKEDIN_URL": "https://www.linkedin.com/in/mohamed-sid-ahmed/",
+  "LINKEDIN_PROFILES": [
+    {"name": "Mohamed", "url": "https://www.linkedin.com/in/mohamed-sid-ahmed/"}
+  ],
   "TARGET_COUNTRIES": ["France", "Morocco"],
   "SEARCH_KEYWORDS": [
     "mission freelance",

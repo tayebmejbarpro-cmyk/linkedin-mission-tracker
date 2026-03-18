@@ -24,7 +24,7 @@ from matcher.profile_matcher import EnrichedPost
 # Google Sheets API scopes
 _SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Column layout (A=0 … J=9)
+# Column layout (A=0 … K=10)
 _HEADERS = [
     "date",            # A — post publication date (YYYY-MM-DD)
     "heure",           # B — post publication hour (HH:MM)
@@ -36,6 +36,7 @@ _HEADERS = [
     "post_url",        # H ← dedup key
     "pays",            # I
     "ville",           # J
+    "profil",          # K — LinkedIn profile name with best match
 ]
 
 # Column index (0-based) for match_score and post_url
@@ -97,18 +98,20 @@ def sync_config_tab(
         logger.warning("[sheets] '%s' tab is empty or unreadable — using settings.json config.", _CONFIG_TAB)
         return config
 
+    profiles = overrides.get("profiles") or config.linkedin_profiles
     countries = overrides.get("countries") or config.target_countries
     keywords = overrides.get("keywords") or config.search_keywords
     min_score = overrides.get("score_minimum", config.min_match_score)
     max_posts = overrides.get("posts_max_par_pays", config.max_posts_per_country)
 
     logger.info(
-        "[sheets] Config from sheet — countries: %s | keywords: %d | min_score: %d | max_posts: %d",
-        countries, len(keywords), min_score, max_posts,
+        "[sheets] Config from sheet — profiles: %d | countries: %s | keywords: %d | min_score: %d",
+        len(profiles), countries, len(keywords), min_score,
     )
 
     return replace(
         config,
+        linkedin_profiles=profiles[:3],  # max 3 profiles
         target_countries=countries,
         search_keywords=keywords,
         min_match_score=int(min_score),
@@ -139,20 +142,24 @@ def _create_config_tab(
     service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
     rows: List[List[str]] = [
-        ["parametre", "valeur"],
-        ["# Pays cibles (un pays par ligne)", ""],
+        ["parametre", "valeur_1", "valeur_2"],
+        ["# Profils LinkedIn (max 3) — format : profil | Nom | URL", "", ""],
     ]
-    for country in config.target_countries:
-        rows.append(["pays", country])
+    for p in config.linkedin_profiles:
+        rows.append(["profil", p.get("name", ""), p.get("url", "")])
 
-    rows.append(["# Mots-clés de recherche (un mot-clé par ligne)", ""])
+    rows.append(["# Pays cibles (un pays par ligne)", "", ""])
+    for country in config.target_countries:
+        rows.append(["pays", country, ""])
+
+    rows.append(["# Mots-clés de recherche (un mot-clé par ligne)", "", ""])
     for kw in config.search_keywords:
-        rows.append(["keyword", kw])
+        rows.append(["keyword", kw, ""])
 
     rows += [
-        ["# Filtres", ""],
-        ["score_minimum", str(config.min_match_score)],
-        ["posts_max_par_pays", str(config.max_posts_per_country)],
+        ["# Filtres", "", ""],
+        ["score_minimum", str(config.min_match_score), ""],
+        ["posts_max_par_pays", str(config.max_posts_per_country), ""],
     ]
 
     range_name = f"'{_CONFIG_TAB}'!A1"
@@ -189,38 +196,41 @@ def _read_config_tab(
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range=f"'{_CONFIG_TAB}'!A:B",
+            range=f"'{_CONFIG_TAB}'!A:C",
         ).execute()
     except Exception as exc:
         logger.warning("[sheets] Could not read '%s' tab: %s", _CONFIG_TAB, exc)
         return {}
 
     rows = result.get("values", [])
-    overrides: Dict[str, Any] = {"countries": [], "keywords": []}
+    overrides: Dict[str, Any] = {"countries": [], "keywords": [], "profiles": []}
 
     for row in rows:
         if not row:
             continue
         key = str(row[0]).strip()
-        val = str(row[1]).strip() if len(row) > 1 else ""
+        val1 = str(row[1]).strip() if len(row) > 1 else ""
+        val2 = str(row[2]).strip() if len(row) > 2 else ""
 
         if not key or key.startswith("#") or key == "parametre":
             continue  # skip headers and section markers
 
-        if key == "pays" and val:
-            overrides["countries"].append(val)
-        elif key == "keyword" and val:
-            overrides["keywords"].append(val)
-        elif key == "score_minimum" and val:
+        if key == "profil" and val1 and val2:
+            overrides["profiles"].append({"name": val1, "url": val2})
+        elif key == "pays" and val1:
+            overrides["countries"].append(val1)
+        elif key == "keyword" and val1:
+            overrides["keywords"].append(val1)
+        elif key == "score_minimum" and val1:
             try:
-                overrides["score_minimum"] = int(val)
+                overrides["score_minimum"] = int(val1)
             except ValueError:
-                logger.warning("[sheets] Invalid score_minimum value: %r", val)
-        elif key == "posts_max_par_pays" and val:
+                logger.warning("[sheets] Invalid score_minimum value: %r", val1)
+        elif key == "posts_max_par_pays" and val1:
             try:
-                overrides["posts_max_par_pays"] = int(val)
+                overrides["posts_max_par_pays"] = int(val1)
             except ValueError:
-                logger.warning("[sheets] Invalid posts_max_par_pays value: %r", val)
+                logger.warning("[sheets] Invalid posts_max_par_pays value: %r", val1)
 
     return overrides
 
@@ -480,6 +490,7 @@ def _build_row(post: EnrichedPost) -> List[Any]:
         post.get("post_url", ""),                # H: post_url
         post.get("country", ""),                 # I: pays
         post.get("location", ""),                # J: ville
+        post.get("profil_name", ""),             # K: profil
     ]
 
 
@@ -601,7 +612,7 @@ def _write_error_row(
     """
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     hour_str = datetime.now(timezone.utc).strftime("%H:%M")
-    error_row = [date_str, hour_str, "", "PIPELINE ERROR", "", -1, "", "ERROR", "N/A", ""]
+    error_row = [date_str, hour_str, "", "PIPELINE ERROR", "", -1, "", "ERROR", "N/A", "", ""]
     try:
         range_name = f"'{tab_name}'!A1"
         service.spreadsheets().values().append(

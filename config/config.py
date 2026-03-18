@@ -22,8 +22,8 @@ class AppConfig:
     google_service_account_json: str  # raw JSON string, parsed in-memory — never written to disk
     spreadsheet_id: str
 
-    # From config/settings.json
-    my_linkedin_url: str
+    # From config/settings.json (or overridden by Paramètres sheet tab)
+    linkedin_profiles: List[Dict[str, str]]  # [{"name": "...", "url": "..."}, ...]  max 3
     target_countries: List[str]
     search_keywords: List[str]
     min_match_score: int
@@ -64,12 +64,30 @@ def load_config() -> AppConfig:
             f"MIN_MATCH_SCORE must be between 0 and 100, got {min_match_score}."
         )
 
+    # Support both new LINKEDIN_PROFILES list and legacy MY_LINKEDIN_URL string
+    if "LINKEDIN_PROFILES" in settings:
+        linkedin_profiles = settings["LINKEDIN_PROFILES"]
+        if not isinstance(linkedin_profiles, list) or not linkedin_profiles:
+            raise EnvironmentError("LINKEDIN_PROFILES must be a non-empty list in settings.json.")
+        for p in linkedin_profiles:
+            if not isinstance(p, dict) or "name" not in p or "url" not in p:
+                raise EnvironmentError(
+                    "Each entry in LINKEDIN_PROFILES must have 'name' and 'url' keys."
+                )
+    elif "MY_LINKEDIN_URL" in settings:
+        # Backward-compat with old settings.json format
+        linkedin_profiles = [{"name": "Principal", "url": settings["MY_LINKEDIN_URL"]}]
+    else:
+        raise EnvironmentError(
+            "settings.json must contain either 'LINKEDIN_PROFILES' (list) or 'MY_LINKEDIN_URL' (string)."
+        )
+
     return AppConfig(
         apify_api_token=apify_api_token,
         anthropic_api_key=anthropic_api_key,
         google_service_account_json=google_service_account_json,
         spreadsheet_id=spreadsheet_id,
-        my_linkedin_url=settings["MY_LINKEDIN_URL"],
+        linkedin_profiles=linkedin_profiles[:3],  # max 3 profiles
         target_countries=settings["TARGET_COUNTRIES"],
         search_keywords=settings["SEARCH_KEYWORDS"],
         min_match_score=min_match_score,
