@@ -2,7 +2,7 @@
 matcher/profile_matcher.py — Claude API-based mission scoring engine.
 
 Fetches the consultant's LinkedIn profile once, builds a profile vector,
-then scores each raw post with Claude claude-3-5-haiku-20241022.
+then scores each raw post with Claude Haiku 4.5.
 Filters posts below MIN_MATCH_SCORE and returns the rest sorted by score descending.
 """
 
@@ -22,7 +22,7 @@ from config.config import AppConfig
 from scraper.linkedin_scraper import RawPost
 
 # Claude model for scoring — fast and cost-efficient
-_CLAUDE_MODEL = "claude-3-5-haiku-20241022"
+_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 _CLAUDE_MAX_TOKENS = 1024
 _CLAUDE_TEMPERATURE = 0.0
 
