@@ -74,10 +74,11 @@ def main() -> None:
       1. Setup logging
       2. Load .env (no-op in GitHub Actions where secrets are injected natively)
       3. Load and validate config (raises on missing env vars → exit 1)
-      4. Scrape posts via Apify
-      5. Score posts via Claude API
-      6. Write to Google Sheets
-      7. Log final summary
+      4. Load cross-run dedup index from Google Sheet
+      5. Scrape posts via Apify (known posts filtered before scoring)
+      6. Score posts via Claude API
+      7. Write to Google Sheets + update Dedup_Index
+      8. Log final summary
 
     On any unhandled exception: logs full traceback and exits with code 1
     so GitHub Actions marks the run as failed.
@@ -98,7 +99,7 @@ def main() -> None:
         from config.config import load_config
         from scraper import scrape_all_countries
         from matcher import score_posts, fetch_profile_vectors
-        from sheets import write_missions, sync_config_tab, load_profile_vectors, save_profile_vectors, load_feedback_examples
+        from sheets import write_missions, sync_config_tab, load_profile_vectors, save_profile_vectors, load_feedback_examples, load_seen_posts_all_tabs
 
         # Step 1 — Config (fail fast)
         logger.info("[run] Loading configuration...")
@@ -128,9 +129,17 @@ def main() -> None:
         else:
             logger.info("[run] All profile vectors loaded from cache — no Apify call needed.")
 
-        # Step 2 — Scrape
+        # Step 2 — Load cross-run dedup index from Google Sheet
+        logger.info("[run] Loading dedup index (cross-run deduplication)...")
+        seen_urls_global, seen_hashes_global = load_seen_posts_all_tabs(config, logger)
+        logger.info(
+            "[run] Dedup index ready — %d known URLs, %d known text hashes.",
+            len(seen_urls_global), len(seen_hashes_global),
+        )
+
+        # Step 3 — Scrape (cross-run known posts filtered out before scoring)
         logger.info("[run] Starting Apify scraping...")
-        raw_posts = scrape_all_countries(config, logger)
+        raw_posts = scrape_all_countries(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
         logger.info("[run] Scraping complete — %d raw posts collected.", len(raw_posts))
 
         if not raw_posts:
@@ -153,9 +162,9 @@ def main() -> None:
             len(enriched_posts), config.min_match_score,
         )
 
-        # Step 4 — Write to Sheets
+        # Step 4 — Write to Sheets (seen sets passed for belt-and-suspenders dedup)
         logger.info("[run] Writing to Google Sheets...")
-        write_missions(enriched_posts, config, logger)
+        write_missions(enriched_posts, config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
 
         # Final summary
         logger.info("=" * 60)

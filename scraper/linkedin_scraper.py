@@ -55,7 +55,12 @@ class RawPost(dict):
     """
 
 
-def scrape_all_countries(config: AppConfig, logger: logging.Logger) -> List[RawPost]:
+def scrape_all_countries(
+    config: AppConfig,
+    logger: logging.Logger,
+    seen_urls: Optional[Set[str]] = None,
+    seen_hashes: Optional[Set[str]] = None,
+) -> List[RawPost]:
     """
     Orchestrate Apify scraping for all countries and keywords in config.
 
@@ -64,13 +69,25 @@ def scrape_all_countries(config: AppConfig, logger: logging.Logger) -> List[RawP
     text hash (to catch reposts with different URLs). Saves raw results to
     data/raw_posts_{YYYY-MM-DD}.json before returning.
 
+    Cross-run deduplication: posts whose URL or text hash are already present
+    in the Google Sheet (pre-loaded by run.py) are discarded before being
+    returned to the scorer, avoiding unnecessary Claude API calls.
+
     Args:
         config: Loaded application configuration.
         logger: Configured logger instance.
+        seen_urls: Optional set of post URLs already written in previous runs.
+        seen_hashes: Optional set of text hashes already written in previous runs.
 
     Returns:
-        List of deduplicated RawPost dicts, all published within the last 24 hours.
+        List of deduplicated RawPost dicts, all published within the last 24 hours,
+        with already-known posts (by URL or text hash) removed.
     """
+    # Cross-run sets (from Google Sheet) — rename to avoid shadowing local sets
+    seen_urls_global: Set[str] = seen_urls if seen_urls is not None else set()
+    seen_hashes_global: Set[str] = seen_hashes if seen_hashes is not None else set()
+
+    # In-memory per-run sets (reset each execution)
     seen_urls: set = set()
     seen_text_hashes: set = set()
     all_posts: List[RawPost] = []
@@ -115,14 +132,21 @@ def scrape_all_countries(config: AppConfig, logger: logging.Logger) -> List[RawP
                     continue
                 if not _is_within_24h(post["post_date"], logger):
                     continue
-                # Deduplicate by URL
+                # Deduplicate by URL (in-memory, this run)
                 if post["post_url"] in seen_urls:
                     logger.debug("[scraper] duplicate URL skipped: %s", post["post_url"])
                     continue
-                # Deduplicate by text hash (catches reposts with different URLs)
+                # Deduplicate by text hash (in-memory, catches reposts with different URLs)
                 text_hash = _text_hash(post["post_text"])
                 if text_hash in seen_text_hashes:
                     logger.debug("[scraper] near-duplicate text skipped: %s", post["post_url"])
+                    continue
+                # Cross-run dedup: skip posts already stored in Google Sheet
+                if post["post_url"] in seen_urls_global:
+                    logger.debug("[scraper] cross-run duplicate URL skipped: %s", post["post_url"])
+                    continue
+                if text_hash in seen_hashes_global:
+                    logger.debug("[scraper] cross-run repost skipped (text hash): %s", post["post_url"])
                     continue
 
                 seen_urls.add(post["post_url"])
