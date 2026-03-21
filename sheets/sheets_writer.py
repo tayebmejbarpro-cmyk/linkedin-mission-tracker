@@ -953,7 +953,7 @@ def _apply_conditional_formatting(
     requests = [
         _rule("NUMBER_GREATER_THAN_EQ", [str(_GREEN_MIN)], _COLOR_GREEN),
         _rule("NUMBER_BETWEEN", [str(_YELLOW_MIN), str(_GREEN_MIN - 1)], _COLOR_YELLOW),
-        _rule("NUMBER_LESS_THAN", [str(_YELLOW_MIN)], _COLOR_RED),
+        _rule("NUMBER_LESS", [str(_YELLOW_MIN)], _COLOR_RED),
     ]
 
     service.spreadsheets().batchUpdate(
