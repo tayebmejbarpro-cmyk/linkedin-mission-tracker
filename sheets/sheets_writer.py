@@ -8,6 +8,7 @@ and applies color-coded conditional formatting based on match_score.
 Also manages a "Paramètres" tab for editable search configuration.
 """
 
+import hashlib
 import json
 import logging
 from dataclasses import replace
@@ -61,6 +62,154 @@ _CONFIG_TAB = "Paramètres"
 # Profile vector cache tab name
 _PROFILES_CACHE_TAB = "Profils_Cache"
 _PROFILES_CACHE_HEADERS = ["profile_name", "url", "vector", "fetched_at"]
+
+# Dedup index tab — persists post_url + text_hash across all runs
+_DEDUP_INDEX_TAB = "Dedup_Index"
+_DEDUP_INDEX_HEADERS = ["post_url", "text_hash"]
+
+
+def _text_hash_local(text: str) -> str:
+    """
+    Compute MD5 of the first 300 normalized characters of post text.
+
+    Mirrors scraper._text_hash — kept as a local copy to avoid a circular import.
+
+    Args:
+        text: Full post text string.
+
+    Returns:
+        MD5 hex digest string.
+    """
+    normalized = " ".join(text[:300].split())
+    return hashlib.md5(normalized.encode("utf-8")).hexdigest()
+
+
+def _ensure_dedup_index_tab(
+    service: Any,
+    spreadsheet_id: str,
+    existing_tabs: set,
+    logger: logging.Logger,
+) -> None:
+    """
+    Create the Dedup_Index tab with its header row if it does not already exist.
+
+    No-op when the tab is already present. Called from load_seen_posts_all_tabs()
+    so the tab is always available before any read or write.
+
+    Args:
+        service: Authenticated Sheets service.
+        spreadsheet_id: Target spreadsheet ID.
+        existing_tabs: Set of tab names already in the spreadsheet.
+        logger: Logger instance.
+    """
+    if _DEDUP_INDEX_TAB in existing_tabs:
+        return
+    body = {"requests": [{"addSheet": {"properties": {"title": _DEDUP_INDEX_TAB}}}]}
+    service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+    service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"'{_DEDUP_INDEX_TAB}'!A1",
+        valueInputOption="RAW",
+        body={"values": [_DEDUP_INDEX_HEADERS]},
+    ).execute()
+    logger.info("[sheets] Created '%s' tab.", _DEDUP_INDEX_TAB)
+
+
+def load_seen_posts_all_tabs(
+    config: AppConfig,
+    logger: logging.Logger,
+) -> tuple:
+    """
+    Load all previously-seen post URLs and text hashes from the Dedup_Index tab.
+
+    Called once at the start of every pipeline run. The returned sets are passed
+    to both the scraper (to skip posts before scoring) and the writer (as a
+    belt-and-suspenders guard before appending).
+
+    On any failure (auth error, network, tab missing), logs a warning and returns
+    two empty sets — the pipeline falls back to in-memory-only deduplication.
+
+    Args:
+        config: Application configuration.
+        logger: Logger instance.
+
+    Returns:
+        Tuple of (seen_urls: Set[str], seen_hashes: Set[str]).
+    """
+    try:
+        service = _get_sheets_service(config.google_service_account_json)
+        spreadsheet = service.spreadsheets().get(spreadsheetId=config.spreadsheet_id).execute()
+        existing_tabs = {s["properties"]["title"] for s in spreadsheet.get("sheets", [])}
+    except Exception as exc:
+        logger.warning("[sheets] load_seen_posts_all_tabs: auth failed — %s", exc)
+        return set(), set()
+
+    _ensure_dedup_index_tab(service, config.spreadsheet_id, existing_tabs, logger)
+
+    try:
+        result = service.spreadsheets().values().get(
+            spreadsheetId=config.spreadsheet_id,
+            range=f"'{_DEDUP_INDEX_TAB}'!A:B",
+        ).execute()
+    except Exception as exc:
+        logger.warning("[sheets] Could not read '%s' tab: %s", _DEDUP_INDEX_TAB, exc)
+        return set(), set()
+
+    rows = result.get("values", [])
+    seen_urls: Set[str] = set()
+    seen_hashes: Set[str] = set()
+    for row in rows[1:]:  # skip header
+        if len(row) >= 1 and row[0]:
+            seen_urls.add(str(row[0]).strip())
+        if len(row) >= 2 and row[1]:
+            seen_hashes.add(str(row[1]).strip())
+
+    logger.info(
+        "[sheets] Dedup index loaded — %d known URLs, %d known text hashes.",
+        len(seen_urls), len(seen_hashes),
+    )
+    return seen_urls, seen_hashes
+
+
+def _append_dedup_index(
+    service: Any,
+    spreadsheet_id: str,
+    posts: List[EnrichedPost],
+    logger: logging.Logger,
+) -> None:
+    """
+    Append new (post_url, text_hash) rows to the Dedup_Index tab.
+
+    Called only after a successful write to a Missions tab so the index stays
+    consistent with what is actually stored. Failure is logged as a warning
+    and never propagates.
+
+    Args:
+        service: Authenticated Sheets service.
+        spreadsheet_id: Target spreadsheet ID.
+        posts: EnrichedPosts that were just successfully written to the sheet.
+        logger: Logger instance.
+    """
+    if not posts:
+        return
+    rows = [
+        [p.get("post_url", ""), _text_hash_local(p.get("post_text", ""))]
+        for p in posts
+        if p.get("post_url")
+    ]
+    if not rows:
+        return
+    try:
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=f"'{_DEDUP_INDEX_TAB}'!A1",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": rows},
+        ).execute()
+        logger.info("[sheets] Dedup index updated with %d new entries.", len(rows))
+    except Exception as exc:
+        logger.warning("[sheets] Could not update dedup index: %s", exc)
 
 
 def sync_config_tab(
@@ -422,10 +571,19 @@ def write_missions(
     enriched_posts: List[EnrichedPost],
     config: AppConfig,
     logger: logging.Logger,
+    seen_urls: Optional[Set[str]] = None,
+    seen_hashes: Optional[Set[str]] = None,
 ) -> None:
     """
     Full write pipeline: authenticate → get/create tab → deduplicate →
-    append rows → apply conditional formatting.
+    append rows → apply conditional formatting → update Dedup_Index.
+
+    Deduplication is two-layered:
+      1. Cross-run: uses seen_urls and seen_hashes loaded from Dedup_Index at
+         the start of the run (passed in by run.py).
+      2. Current-tab belt-and-suspenders: re-reads column H of the current
+         monthly tab in case the pre-loaded sets were stale.
+    Text-hash dedup catches same-content reposts with a new URL.
 
     Never raises. On fatal error, attempts to write an ERROR row to the sheet,
     then returns. Formatting failures are logged as warnings only.
@@ -434,6 +592,8 @@ def write_missions(
         enriched_posts: Scored and filtered mission posts.
         config: Application configuration.
         logger: Logger instance.
+        seen_urls: Set of post URLs already in the sheet (all tabs, pre-loaded).
+        seen_hashes: Set of text hashes already in the sheet (pre-loaded).
     """
     tab_name = _build_tab_name(config.sheet_tab_format)
 
@@ -450,13 +610,28 @@ def write_missions(
         _write_error_row(service, config.spreadsheet_id, tab_name, str(exc), logger)
         return
 
+    # Merge pre-loaded global sets with current-tab URLs (belt-and-suspenders)
+    _seen_urls: Set[str] = set(seen_urls) if seen_urls else set()
+    _seen_hashes: Set[str] = set(seen_hashes) if seen_hashes else set()
     try:
-        existing_urls = _get_existing_urls(service, config.spreadsheet_id, tab_name)
+        tab_urls = _get_existing_urls(service, config.spreadsheet_id, tab_name)
+        _seen_urls |= tab_urls
     except Exception as exc:
-        logger.error("[sheets] Could not read existing URLs for dedup: %s", exc)
-        existing_urls = set()
+        logger.warning("[sheets] Could not read current-tab URLs for dedup fallback: %s", exc)
 
-    new_posts = [p for p in enriched_posts if p.get("post_url") not in existing_urls]
+    # Filter: drop posts already seen by URL or by text hash (catches reposts)
+    new_posts = []
+    for p in enriched_posts:
+        url = p.get("post_url", "")
+        h = _text_hash_local(p.get("post_text", ""))
+        if url in _seen_urls:
+            logger.debug("[sheets] dedup: skipping known URL %s", url)
+            continue
+        if h in _seen_hashes:
+            logger.debug("[sheets] dedup: skipping known text hash (repost) %s", url)
+            continue
+        new_posts.append(p)
+
     skipped = len(enriched_posts) - len(new_posts)
 
     if not new_posts:
@@ -472,6 +647,9 @@ def write_missions(
         logger.error("[sheets] Row append failed: %s", exc)
         _write_error_row(service, config.spreadsheet_id, tab_name, str(exc), logger)
         return
+
+    # Update the Dedup_Index with newly written posts
+    _append_dedup_index(service, config.spreadsheet_id, new_posts, logger)
 
     # Apply conditional formatting — failure is cosmetic, never blocks
     try:
