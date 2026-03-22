@@ -74,16 +74,12 @@ def scrape_google(
     # Use yesterday's date for the `after:` operator (24h window)
     yesterday = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%d")
 
-    pairs = [
-        (country, keyword)
-        for country in config.target_countries
-        for keyword in config.search_keywords
-    ]
+    pairs = [("", keyword) for keyword in config.search_keywords]
     total = len(pairs)
-    logger.info("[google_scraper] %d country×keyword pairs to query.", total)
+    logger.info("[google_scraper] %d keyword queries to run.", total)
 
     for idx, (country, keyword) in enumerate(pairs, start=1):
-        query = f'site:linkedin.com/posts "{keyword}" "{country}" after:{yesterday}'
+        query = f'site:linkedin.com/posts "{keyword}" after:{yesterday}'
         logger.debug("[google_scraper] (%d/%d) Query: %s", idx, total, query)
 
         try:

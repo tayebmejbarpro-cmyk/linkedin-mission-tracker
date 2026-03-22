@@ -66,6 +66,51 @@ def setup_logging(date_str: str) -> logging.Logger:
     return logger
 
 
+# Known locations for each target country (EN + FR names + major cities)
+_LOCATION_MAP = {
+    "France": [
+        "france", "paris", "lyon", "marseille", "toulouse", "nice", "nantes",
+        "bordeaux", "strasbourg", "lille", "montpellier", "rennes", "reims",
+        "le havre", "saint-étienne", "toulon", "grenoble", "dijon", "angers",
+        "nîmes", "brest", "tours", "amiens", "limoges", "clermont-ferrand",
+        "aix-en-provence", "villeurbanne", "metz", "besançon", "caen", "orléans",
+        "île-de-france", "idf", "hauts-de-france", "paca",
+    ],
+    "Morocco": [
+        "maroc", "morocco", "casablanca", "rabat", "marrakech", "fès", "tanger",
+        "agadir", "meknès", "oujda", "kénitra", "tétouan", "safi", "el jadida",
+        "nador", "taza", "settat", "berrechid",
+    ],
+}
+_REMOTE_KEYWORDS = {"remote", "télétravail", "à distance", "full remote", "hybrid", "hybride"}
+
+
+def _passes_location_filter(post: dict, target_countries: list) -> bool:
+    """
+    Return True if post location is unknown, remote, or in a target country/city.
+
+    Always keeps posts with no location (can't rule them out from snippet alone).
+    Remote/hybrid posts pass regardless of country.
+
+    Args:
+        post: Enriched post dict with optional 'location' field.
+        target_countries: List of country names from config (e.g. ["France", "Morocco"]).
+
+    Returns:
+        True if the post should be kept, False if it should be filtered out.
+    """
+    location = post.get("location", "").strip().lower()
+    if not location:
+        return True
+    if any(kw in location for kw in _REMOTE_KEYWORDS):
+        return True
+    for country in target_countries:
+        known = _LOCATION_MAP.get(country, [country.lower()])
+        if any(city in location for city in known):
+            return True
+    return False
+
+
 def main() -> None:
     """
     Run the full LinkedIn Freelance Mission Tracker pipeline.
@@ -171,6 +216,14 @@ def main() -> None:
         logger.info(
             "[run] Scoring complete — %d posts scored >= %d.",
             len(enriched_posts), config.min_match_score,
+        )
+
+        # Step 3c — Location filter: keep only posts in target countries (or unknown/remote)
+        before_loc = len(enriched_posts)
+        enriched_posts = [p for p in enriched_posts if _passes_location_filter(p, config.target_countries)]
+        logger.info(
+            "[run] Location filter: %d/%d posts kept (target countries: %s).",
+            len(enriched_posts), before_loc, config.target_countries,
         )
 
         # Step 4 — Write to Sheets (seen sets passed for belt-and-suspenders dedup)

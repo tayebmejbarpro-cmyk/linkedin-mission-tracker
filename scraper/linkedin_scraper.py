@@ -94,14 +94,10 @@ def scrape_all_countries(
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     apify_failures = 0
 
-    pairs = [
-        (country, keyword)
-        for country in config.target_countries
-        for keyword in config.search_keywords
-    ]
+    pairs = [("", keyword) for keyword in config.search_keywords]
     total = len(pairs)
     logger.info(
-        "[scraper] %d country×keyword pairs — running up to %d in parallel.",
+        "[scraper] %d keyword queries — running up to %d in parallel.",
         total, _MAX_CONCURRENT_APIFY,
     )
 
@@ -195,7 +191,7 @@ def _run_apify_actor(
 
     client = ApifyClient(config.apify_api_token)
     run_input = {
-        "keyword": f"{keyword} {country}",
+        "keyword": f"{keyword} {country}".strip(),
         "sort_type": "date_posted",
         "date_filter": "past-24h",
         "limit": min(config.max_posts_per_country, 50),
