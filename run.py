@@ -12,8 +12,10 @@ Can also be run locally: `python run.py`
 """
 
 import logging
+import re
 import sys
 import traceback
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -69,20 +71,51 @@ def setup_logging(date_str: str) -> logging.Logger:
 # Known locations for each target country (EN + FR names + major cities)
 _LOCATION_MAP = {
     "France": [
-        "france", "paris", "lyon", "marseille", "toulouse", "nice", "nantes",
+        "france", "français", "française",
+        # Metropolitan regions & departments
+        "île-de-france", "idf", "hauts-de-seine", "val-de-marne", "seine-saint-denis",
+        "val-d'oise", "essonne", "yvelines", "seine-et-marne",
+        "auvergne-rhône-alpes", "hauts-de-france", "paca", "occitanie",
+        "bretagne", "normandie", "nouvelle-aquitaine", "grand est",
+        "pays de la loire", "centre-val de loire", "bourgogne-franche-comté",
+        "corse", "dom-tom",
+        # Major cities
+        "paris", "lyon", "marseille", "toulouse", "nice", "nantes",
         "bordeaux", "strasbourg", "lille", "montpellier", "rennes", "reims",
         "le havre", "saint-étienne", "toulon", "grenoble", "dijon", "angers",
         "nîmes", "brest", "tours", "amiens", "limoges", "clermont-ferrand",
         "aix-en-provence", "villeurbanne", "metz", "besançon", "caen", "orléans",
-        "île-de-france", "idf", "hauts-de-france", "paca",
+        # Paris suburbs & frequent LinkedIn locations
+        "la défense", "neuilly", "issy-les-moulineaux", "boulogne-billancourt",
+        "levallois", "clichy", "saint-denis", "saint-cloud", "versailles",
+        "courbevoie", "puteaux", "nanterre", "créteil", "vincennes", "montreuil",
+        "châtillon", "chatillon", "malakoff", "montrouge", "clamart", "massy",
+        "gif-sur-yvette", "saclay", "évry", "cergy", "poissy",
+        # Other regional cities
+        "sophia antipolis", "blois", "niort", "dreux", "roanne", "bayonne",
+        "pau", "perpignan", "avignon", "arles", "valence", "chambéry",
+        "annecy", "rouen", "le mans", "poitiers", "la rochelle",
+        "angoulême", "périgueux", "agen", "tarbes", "albi", "cahors",
+        "auxerre", "troyes", "charleville-mézières", "laon", "beauvais",
+        "cesson-sévigné", "lannion", "lorient", "quimper", "vannes", "saint-brieuc",
+        "château-thierry", "compiègne", "senlis", "chantilly", "pontoise",
     ],
     "Morocco": [
-        "maroc", "morocco", "casablanca", "rabat", "marrakech", "fès", "tanger",
-        "agadir", "meknès", "oujda", "kénitra", "tétouan", "safi", "el jadida",
+        "maroc", "morocco", "casablanca", "rabat", "marrakech", "fès", "fes",
+        "tanger", "tangier", "agadir", "meknès", "meknes", "oujda",
+        "kénitra", "kenitra", "tétouan", "tetouan", "safi", "el jadida",
         "nador", "taza", "settat", "berrechid",
     ],
 }
 _REMOTE_KEYWORDS = {"remote", "télétravail", "à distance", "full remote", "hybrid", "hybride"}
+
+
+def _strip_accents(s: str) -> str:
+    """Return s with all diacritic marks removed (e.g. 'kénitra' → 'kenitra')."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
 
 
 def _passes_location_filter(post: dict, target_countries: list) -> bool:
@@ -105,9 +138,17 @@ def _passes_location_filter(post: dict, target_countries: list) -> bool:
         return True
     if any(kw in location for kw in _REMOTE_KEYWORDS):
         return True
+    # French department/postal code pattern: (75), (92), (79000), etc.
+    dept_match = re.search(r"\((\d{2,5})\)", location)
+    if dept_match:
+        code = int(dept_match.group(1))
+        if (1 <= code <= 95) or (1000 <= code <= 95999):
+            return True
+    # Accent-normalized substring matching against known cities/regions
+    location_norm = _strip_accents(location)
     for country in target_countries:
         known = _LOCATION_MAP.get(country, [country.lower()])
-        if any(city in location for city in known):
+        if any(_strip_accents(city) in location_norm for city in known):
             return True
     return False
 
