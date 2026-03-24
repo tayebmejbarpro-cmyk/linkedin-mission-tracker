@@ -224,10 +224,13 @@ def main() -> None:
             len(seen_urls_global), len(seen_hashes_global),
         )
 
-        # Step 3 — Scrape via Apify (cross-run known posts filtered out before scoring)
-        logger.info("[run] Starting Apify scraping...")
-        raw_posts = scrape_all_countries(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
-        logger.info("[run] Apify scraping complete — %d raw posts collected.", len(raw_posts))
+        # Step 3 — Scrape via Apify (temporarily disabled to focus on Google CSE debugging)
+        # TODO: re-enable once Google CSE is confirmed working
+        # logger.info("[run] Starting Apify scraping...")
+        # raw_posts = scrape_all_countries(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
+        # logger.info("[run] Apify scraping complete — %d raw posts collected.", len(raw_posts))
+        raw_posts = []
+        logger.info("[run] Apify scraping DISABLED (debug mode — Google CSE only).")
 
         # Step 3b — Google CSE fallback scraper (opt-in, enabled by GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID)
         if config.google_cse_api_key and config.google_cse_id:
