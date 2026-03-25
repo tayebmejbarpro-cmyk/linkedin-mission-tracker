@@ -78,13 +78,14 @@ def scrape_bereach(
         "[bereach] Running %d keyword queries in parallel.", len(_KEYWORD_QUERIES)
     )
 
-    # Fetch all pages for each query in parallel
+    # Fetch all pages for each query in parallel, staggered by 2s to avoid 429
     with ThreadPoolExecutor(max_workers=len(_KEYWORD_QUERIES)) as executor:
         futures = {
             executor.submit(
-                _fetch_all_pages, keywords, headers, config.max_posts_per_country, logger
+                _fetch_all_pages, keywords, headers, config.max_posts_per_country, logger,
+                initial_delay=i * 2.0,
             ): keywords
-            for keywords in _KEYWORD_QUERIES
+            for i, keywords in enumerate(_KEYWORD_QUERIES)
         }
         raw_batches: List[List[Dict[str, Any]]] = []
         for future in as_completed(futures):
@@ -136,6 +137,7 @@ def _fetch_all_pages(
     headers: Dict[str, str],
     max_posts: int,
     logger: logging.Logger,
+    initial_delay: float = 0.0,
 ) -> List[Dict[str, Any]]:
     """
     Fetch all paginated results for a single keyword query from the BeReach API.
@@ -148,10 +150,15 @@ def _fetch_all_pages(
         headers: HTTP headers including Authorization.
         max_posts: Maximum number of raw items to collect.
         logger: Logger instance.
+        initial_delay: Seconds to wait before the first request (used to stagger
+                       parallel calls and avoid simultaneous 429 errors).
 
     Returns:
         List of raw item dicts from the API response.
     """
+    if initial_delay > 0:
+        time.sleep(initial_delay)
+
     collected: List[Dict[str, Any]] = []
     start = 0
     page = 0

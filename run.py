@@ -106,6 +106,12 @@ _LOCATION_MAP = {
         "kénitra", "kenitra", "tétouan", "tetouan", "safi", "el jadida",
         "nador", "taza", "settat", "berrechid",
     ],
+    "Maroc": [
+        "maroc", "morocco", "casablanca", "rabat", "marrakech", "fès", "fes",
+        "tanger", "tangier", "agadir", "meknès", "meknes", "oujda",
+        "kénitra", "kenitra", "tétouan", "tetouan", "safi", "el jadida",
+        "nador", "taza", "settat", "berrechid",
+    ],
 }
 _REMOTE_KEYWORDS = {"remote", "télétravail", "à distance", "full remote", "hybrid", "hybride"}
 
