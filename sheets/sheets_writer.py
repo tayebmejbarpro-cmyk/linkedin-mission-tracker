@@ -212,6 +212,32 @@ def _append_dedup_index(
         logger.warning("[sheets] Could not update dedup index: %s", exc)
 
 
+def index_rejected_posts(
+    posts: List[EnrichedPost],
+    config: AppConfig,
+    logger: logging.Logger,
+) -> None:
+    """
+    Add location-filtered (or otherwise rejected) posts to the Dedup_Index tab.
+
+    Prevents rejected posts from being re-scraped and re-scored by Claude on
+    every subsequent run. Called after the location filter in run.py with the
+    list of dropped posts.
+
+    Args:
+        posts: Posts that were scored but rejected (e.g. wrong location).
+        config: Application configuration.
+        logger: Logger instance.
+    """
+    if not posts:
+        return
+    try:
+        service = _get_sheets_service(config.google_service_account_json)
+        _append_dedup_index(service, config.spreadsheet_id, posts, logger)
+    except Exception as exc:
+        logger.warning("[sheets] Could not index rejected posts in dedup: %s", exc)
+
+
 def sync_config_tab(
     config: AppConfig,
     logger: logging.Logger,

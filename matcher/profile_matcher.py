@@ -7,7 +7,6 @@ then scores each raw post with Claude Haiku 4.5 using parallel workers.
 Optimizations vs sequential baseline:
   - ThreadPoolExecutor(5) for concurrent Claude API calls
   - 0.5s delay per worker instead of 2-5s sequential delay
-  - Pre-filter: skip posts with no mission-related signal before sending to Claude
   - Multi-profile: scores post against all profiles in one Claude call
 
 Filters posts below MIN_MATCH_SCORE and returns the rest sorted by score descending.
@@ -149,10 +148,9 @@ def score_posts(
     """
     Main entry point for the matcher module.
 
-    Pre-filters posts, builds/uses profile vectors, scores each post against
-    all profiles with concurrent Claude workers, filters out posts with
-    match_score < MIN_MATCH_SCORE, and returns the remaining posts sorted
-    by match_score descending.
+    Builds/uses profile vectors, scores each post against all profiles with
+    concurrent Claude workers, filters out posts with match_score < MIN_MATCH_SCORE,
+    and returns the remaining posts sorted by match_score descending.
 
     Args:
         raw_posts: List of raw posts from the scraper.

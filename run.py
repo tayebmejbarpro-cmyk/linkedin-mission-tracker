@@ -195,7 +195,7 @@ def main() -> None:
         from config.config import load_config
         from scraper import scrape_all_countries, scrape_bereach
         from matcher import score_posts, fetch_profile_vectors
-        from sheets import write_missions, sync_config_tab, load_profile_vectors, save_profile_vectors, load_feedback_examples, load_seen_posts_all_tabs
+        from sheets import write_missions, sync_config_tab, load_profile_vectors, save_profile_vectors, load_feedback_examples, load_seen_posts_all_tabs, index_rejected_posts
 
         # Step 1 — Config (fail fast)
         logger.info("[run] Loading configuration...")
@@ -283,6 +283,11 @@ def main() -> None:
             "[run] Location filter: %d/%d posts kept (target countries: %s).",
             len(enriched_posts), before_loc, config.target_countries,
         )
+
+        # Index dropped posts in Dedup_Index so they are not re-scraped/re-scored next run
+        if dropped:
+            logger.info("[run] Indexing %d location-filtered posts in dedup to prevent re-scoring...", len(dropped))
+            index_rejected_posts(dropped, config, logger)
 
         # Step 4 — Write to Sheets (seen sets passed for belt-and-suspenders dedup)
         logger.info("[run] Writing to Google Sheets...")
