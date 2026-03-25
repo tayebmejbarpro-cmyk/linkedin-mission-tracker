@@ -33,6 +33,8 @@ _ENDPOINT = "/search/linkedin/posts"
 _KEYWORD_QUERIES: List[str] = [
     '("mission" OR "besoin") AND ("freelance" OR "tjm") AND ("PMO" OR "chef de projet")',
     '("mission" OR "besoin") AND ("freelance" OR "tjm") AND ("itsm" OR "Run")',
+    '("mission" OR "besoin") AND ("freelance" OR "tjm") AND ("business analyst" OR "Product Owner")',
+    '("mission" OR "besoin") AND ("freelance" OR "tjm") AND ("ServiceNow" OR "Incident")',
 ]
 
 # Results per page (BeReach max is 50)
