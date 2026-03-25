@@ -63,6 +63,24 @@ _USER_AGENT = (
 # Regex to strip markdown code fences from Claude responses
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```")
 
+# Consultant domain expertise — injected into every scoring prompt
+# to give Claude explicit context before reading the profile vector.
+_CONSULTANT_PERSONA = """## Consultant Context:
+This consultant is a senior IT freelancer actively seeking missions in France and Morocco.
+
+His core expertise domains — missions in these areas should score >= 60 if the profile confirms:
+  1. PMO / Project Management / Chef de projet SI / Pilotage de projet / MOE / MOA / AMOA
+  2. Service Delivery Manager / SDM / Delivery Manager / Responsable service client IT
+  3. Incident Manager / Major Incident Manager / Gestion des incidents majeurs / War room
+  4. ITSM / Run Manager / MCO / Maintien en condition opérationnelle / TMA / Exploitation IT
+  5. Business Analyst / BA / Analyste fonctionnel / Référent fonctionnel / AMOA
+  6. Product Owner / PO / Responsable produit / Backlog management
+
+Out-of-scope domains — missions outside these areas should score <= 30 unless strong overlap:
+  - Software development (Dev, DevOps, Data Engineering, Data Science, Design, Cybersecurity)
+  - Infrastructure / Sysadmin / Network (unless combined with a management or coordination role)
+  - Pure technical roles without management or functional dimension"""
+
 
 class EnrichedPost(dict):
     """
@@ -608,14 +626,17 @@ def _build_claude_prompt(
         Complete prompt string.
     """
     if len(profiles) == 1:
-        profile_section = f"## Consultant Profile ({profiles[0]['name']}):\n{profiles[0]['vector']}"
+        profile_section = (
+            f"{_CONSULTANT_PERSONA}\n\n"
+            f"## Consultant Profile ({profiles[0]['name']}):\n{profiles[0]['vector']}"
+        )
         scoring_instructions = (
             f"Score how well this profile matches the mission requirements (0-100).\n"
             f"Set best_profil to \"{profiles[0]['name']}\"."
         )
         best_profil_field = f'  "best_profil": "{profiles[0]["name"]}",\n'
     else:
-        profile_section = "## Consultant Profiles:\n"
+        profile_section = f"{_CONSULTANT_PERSONA}\n\n## Consultant Profiles:\n"
         profile_names = []
         for p in profiles:
             profile_section += f"### {p['name']}:\n{p['vector']}\n\n"
@@ -669,7 +690,11 @@ Respond with ONLY a valid JSON object — no preamble, no markdown fences, no ex
   "remote_ok": "boolean — true if remote work is explicitly mentioned or implied",
   "contact_info": "string or null — email or contact method from the post, null if none",
 {best_profil_field}  "match_score": "float 0-100 — match score for best_profil (must be 0 if is_genuine_mission=false)",
-  "match_reasons": ["top 3 concise reasons explaining the score, referencing specific skills"],
+  "match_reasons": [
+    "3 reasons in format: 'TERM_IN_POST ↔ SKILL_IN_PROFILE (match type)'",
+    "match types: direct match | vocabulary equivalence | adjacent domain | no match",
+    "example: 'Pilotage PMO requis ↔ expérience PMO confirmée (direct match)'"
+  ],
   "language": "FR or EN — language of the post",
   "is_target_location": "boolean — see GEO RULE below"
 }}
@@ -686,9 +711,43 @@ Set is_genuine_mission=true only when:
 - The post describes a mission/role to be filled (skills required, duration, rate, location)
 
 ## Scoring guidelines (only applies when is_genuine_mission=true):
-- 80-100: Strong match — most required skills are present in the profile
-- 50-79: Partial match — some relevant skills or domain overlap
-- 0-49: Weak match — few or no skill overlaps
+
+SCORE BASED ON DOMAIN MATCH, NOT JUST KEYWORD MATCH.
+A mission may use different vocabulary than the profile — look for semantic equivalence.
+
+Score bands:
+- 80-100 : Core domain match — mission directly targets the consultant's main expertise
+           (PMO, Chef de projet SI, SDM, Service Delivery, Incident Manager,
+            ITSM, Run/MCO/TMA, Business Analyst, Product Owner, Pilotage, MOE/MOA)
+- 60-79  : Adjacent domain match — mission requires skills the consultant has as secondary
+           competencies, OR uses different vocabulary for the same role
+- 40-59  : Partial overlap — 1-2 key skills match, domain is related but not core
+- 20-39  : Weak match — very few skill overlaps, clearly different domain
+- 0-19   : No match — completely unrelated domain or technical stack
+
+SKILL EQUIVALENCES — treat these pairs as synonyms when scoring:
+- "pilotage de projet" / "conduite de projet" / "coordination projet"
+   = "gestion de projet" / "chef de projet" / "PMO"
+- "Service Delivery Manager" / "SDM" / "responsable delivery" / "responsable service client"
+   = delivery management / ITIL service management
+- "Incident Manager" / "Major Incident Manager" / "gestion des incidents majeurs" / "war room"
+   = incident management / coordination de crise IT
+- "gestion des incidents" / "gestion des problèmes" / "MCO" / "TMA" / "exploitation IT"
+   = "ITSM" / "Run" / "maintien en condition opérationnelle"
+- "MOE" / "MOA" / "AMOA" / "recette" / "qualification" / "référent fonctionnel"
+   = project management / business analysis adjacent (+10 pts bonus)
+- "transformation SI" / "transformation digitale" / "urbanisation SI"
+   = digital transformation
+- "analyste fonctionnel" / "analyste métier" / "analyste SI" / "études fonctionnelles"
+   = "Business Analyst"
+- "PO" / "responsable produit" / "Product Manager" / "proxy PO"
+   = "Product Owner"
+
+SCORING BIAS CORRECTION:
+This consultant is ACTIVELY SEEKING missions. When a mission clearly falls within his
+domain but uses slightly different vocabulary — favor the higher score band.
+A score of 50 means "worth reviewing by the consultant", not "perfect match required".
+Do NOT penalize for skills the profile does not mention explicitly if the broader domain matches.
 
 ## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
 
@@ -765,6 +824,27 @@ ANTI-HALLUCINATION RULES:
   ],
   "language": "FR",
   "is_target_location": false
+}}
+
+## Example output (genuine mission — vocabulary equivalence, high score):
+{{
+  "is_genuine_mission": true,
+  "mission_title": "Pilote de projet transformation SI",
+  "required_skills": ["pilotage", "conduite du changement", "reporting COPIL", "MCO"],
+  "duration": "6 mois",
+  "daily_rate_tjm": "650€/jour",
+  "location": "Lyon",
+  "remote_ok": false,
+  "contact_info": null,
+  "best_profil": "{profiles[0]['name']}",
+  "match_score": 75.0,
+  "match_reasons": [
+    "Pilotage/conduite de projet ↔ expérience Chef de projet SI (vocabulary equivalence)",
+    "MCO/exploitation ↔ background ITSM/Run dans le profil (vocabulary equivalence)",
+    "Transformation SI ↔ digital transformation background (adjacent domain)"
+  ],
+  "language": "FR",
+  "is_target_location": true
 }}
 
 ## Example output (NOT a genuine mission — freelancer advertising themselves):
