@@ -323,9 +323,11 @@ def score_posts(
     )
 
     with ThreadPoolExecutor(max_workers=_MAX_CONCURRENT_SCORING) as executor:
+        _countries = config.target_countries or ["France", "Maroc"]
         future_to_post = {
             executor.submit(
                 _score_post_with_claude, post, profiles, anthropic_client, logger,
+                _countries,
                 feedback_examples or [],
             ): post
             for post in candidates
@@ -658,6 +660,7 @@ def _score_post_with_claude(
     profiles: List[Dict[str, str]],
     anthropic_client: anthropic.Anthropic,
     logger: logging.Logger,
+    target_countries: Optional[List[str]] = None,
     feedback_examples: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
@@ -672,6 +675,8 @@ def _score_post_with_claude(
         profiles: List of profile dicts with 'name' and 'vector' keys.
         anthropic_client: Initialized Anthropic client instance.
         logger: Logger instance.
+        target_countries: List of target country names from config for geo-filtering.
+        feedback_examples: Optional list of past feedback dicts to guide scoring.
 
     Returns:
         Parsed dict with Claude's extracted fields, or safe defaults on error.
@@ -679,7 +684,8 @@ def _score_post_with_claude(
     # Stagger concurrent workers to avoid simultaneous API bursts
     time.sleep(random.uniform(_WORKER_DELAY_MIN, _WORKER_DELAY_MAX))
 
-    prompt = _build_claude_prompt(post.get("post_text", ""), profiles, feedback_examples or [])
+    _countries = target_countries or ["France", "Maroc"]
+    prompt = _build_claude_prompt(post.get("post_text", ""), profiles, _countries, feedback_examples or [])
     backoff_seconds = [10, 20, 40]
 
     for attempt in range(4):  # 1 initial + 3 retries
@@ -718,6 +724,7 @@ def _score_post_with_claude(
 def _build_claude_prompt(
     post_text: str,
     profiles: List[Dict[str, str]],
+    target_countries: List[str],
     feedback_examples: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     """
@@ -730,11 +737,18 @@ def _build_claude_prompt(
     Args:
         post_text: Full text of the LinkedIn post.
         profiles: List of profile dicts with 'name' and 'vector' keys.
+        target_countries: List of target country names from config (e.g. ["France", "Maroc"]).
         feedback_examples: Optional list of past feedback dicts to guide scoring.
 
     Returns:
         Complete prompt string.
     """
+    # Build dynamic country strings for the GEO RULE section
+    _countries = target_countries or ["France", "Maroc"]
+    countries_display = " ou ".join(_countries)
+    countries_true_bullets = "\n".join(
+        f"  \u2192 true  if mission is in {c}" for c in _countries
+    )
     if len(profiles) == 1:
         profile_section = (
             f"{_CONSULTANT_PERSONA}\n\n"
@@ -854,7 +868,7 @@ Do NOT penalize for skills the profile does not mention explicitly if the broade
 
 ## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
 
-Determine if the mission is physically located in France métropolitaine or Maroc.
+Determine if the mission is physically located in {countries_display}.
 
 STEP 1 — Look for an explicit location in the post text:
   - City name, region, department (Paris, Lyon, Île-de-France, Casablanca, Rabat...)
@@ -868,12 +882,10 @@ STEP 2 — If no explicit location, analyze implicit signals:
   - Foreign currency (£, $, CHF) or explicit foreign country → not target
 
 DECISION RULES — set is_target_location to:
-  → true  if mission is in France métropolitaine (mainland France only)
-  → true  if mission is in Maroc (Morocco)
+{countries_true_bullets}
   → true  if mission is "Remote" / "Télétravail" / "Full Remote" (location-independent)
   → true  if location is completely unknown after analysis (safety net — do not lose opportunities)
-  → false if mission is explicitly in another country: Belgique, Luxembourg, Suisse, Espagne,
-           UK, USA, Canada, Allemagne, Pays-Bas, Italie, or any country other than France/Maroc
+  → false if mission is explicitly in a country not listed above
   → false if mission is in DOM-TOM: La Réunion, Guadeloupe, Martinique, Guyane,
            Mayotte, Nouvelle-Calédonie, Polynésie française
 
