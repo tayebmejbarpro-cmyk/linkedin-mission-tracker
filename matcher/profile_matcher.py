@@ -800,15 +800,14 @@ Respond with ONLY a valid JSON object — no preamble, no markdown fences, no ex
 {{
   "is_genuine_mission": "boolean — TRUE only if a company/recruiter/ESN is SEEKING a freelancer. FALSE if: a freelancer advertises their own availability, a personal branding post, an opinion/news article, or any post NOT offering a mission to fill.",
   "mission_title": "string — short title of the mission or role (e.g. 'Chef de projet Data'), empty string if not a genuine mission",
-  "required_skills": ["list", "of", "skills", "mentioned", "in", "the", "post"],
-  "duration": "string — mission duration or contract length (e.g. '3 months', 'CDI', 'unknown')",
-  "daily_rate_tjm": "string or null — daily rate if explicitly mentioned (e.g. '600€/jour'), null otherwise",
+  "required_skills": ["canonical skill names — use standard terms (e.g. 'PMO', 'ITSM', 'Business Analyst', 'Chef de projet', 'Product Owner'). Max 8 skills."],
+  "duration": "string — mission duration or contract length (e.g. '3 mois', 'CDI', 'unknown')",
+  "daily_rate_tjm": "string or null — daily rate if explicitly mentioned, normalized to 'NNN€/jour' format (e.g. '600€/jour', '700€/jour'). null if not mentioned.",
   "location": "string — city of the mission (e.g. 'Paris', 'Casablanca') or 'Remote' if fully remote",
   "remote_ok": "boolean — true if remote work is explicitly mentioned or implied",
   "contact_info": "string or null — email or contact method from the post, null if none",
 {best_profil_field}  "match_score": "float 0-100 — match score for best_profil (must be 0 if is_genuine_mission=false)",
   "match_reasons": ["array of 3 strings — format defined in MATCH_REASONS FORMAT section below"],
-  "language": "FR or EN — language of the post",
   "is_target_location": "boolean — see GEO RULE below"
 }}
 
@@ -824,6 +823,7 @@ Set is_genuine_mission=false (and match_score=0) when:
 - The post is personal branding, self-promotion, or availability announcement
 - The post is an opinion, article, news, or general content not offering a specific role
 - The author IS the consultant, not the client
+- The post announces a mission has been FILLED or closed (e.g. "mission pourvue", "poste pourvu", "nous avons trouvé notre candidat", "clôturé", "profil retenu")
 
 Set is_genuine_mission=true only when:
 - A company, recruiter, manager, or ESN is explicitly LOOKING FOR someone to fill a role
@@ -901,53 +901,11 @@ ANTI-HALLUCINATION RULES:
   - A French-sounding company name does not guarantee the mission is in France.
   - When genuinely uncertain between France and another country → return true (safety net).
 
-## Example output (genuine mission, France):
-{{
-  "is_genuine_mission": true,
-  "mission_title": "Chef de projet Digital",
-  "required_skills": ["gestion de projet", "Agile", "Scrum", "transformation digitale"],
-  "duration": "6 mois",
-  "daily_rate_tjm": "650€/jour",
-  "location": "Paris (Remote possible)",
-  "remote_ok": true,
-  "contact_info": "contact@example.com",
-  "best_profil": "{profiles[0]['name']}",
-  "match_score": 82.5,
-  "match_reasons": [
-    "Chef de projet Digital ↔ expérience Chef de projet SI (direct match)",
-    "Transformation digitale ↔ digital transformation background (direct match)",
-    "Agile/Scrum ↔ compétences Agile/Scrum dans le profil (direct match)"
-  ],
-  "language": "FR",
-  "is_target_location": true
-}}
-
-## Example output (genuine mission, outside target — Luxembourg):
-{{
-  "is_genuine_mission": true,
-  "mission_title": "PMO Senior",
-  "required_skills": ["PMO", "gestion de projet", "reporting"],
-  "duration": "6 mois",
-  "daily_rate_tjm": null,
-  "location": "Luxembourg",
-  "remote_ok": false,
-  "contact_info": null,
-  "best_profil": "{profiles[0]['name']}",
-  "match_score": 65.0,
-  "match_reasons": [
-    "PMO Senior ↔ expérience PMO confirmée (direct match)",
-    "Gestion de projet ↔ compétences chef de projet dans le profil (direct match)",
-    "Reporting ↔ compétences reporting COPIL dans le profil (direct match)"
-  ],
-  "language": "FR",
-  "is_target_location": false
-}}
-
 ## Example output (genuine mission — vocabulary equivalence, high score):
 {{
   "is_genuine_mission": true,
   "mission_title": "Pilote de projet transformation SI",
-  "required_skills": ["pilotage", "conduite du changement", "reporting COPIL", "MCO"],
+  "required_skills": ["Chef de projet", "Conduite du changement", "Reporting", "MCO"],
   "duration": "6 mois",
   "daily_rate_tjm": "650€/jour",
   "location": "Lyon",
@@ -960,7 +918,6 @@ ANTI-HALLUCINATION RULES:
     "MCO/exploitation ↔ background ITSM/Run dans le profil (vocabulary equivalence)",
     "Transformation SI ↔ digital transformation background (adjacent domain)"
   ],
-  "language": "FR",
   "is_target_location": true
 }}
 
@@ -977,7 +934,6 @@ ANTI-HALLUCINATION RULES:
   "best_profil": "{profiles[0]['name']}",
   "match_score": 0,
   "match_reasons": ["Post is a freelancer advertising their own availability, not a mission offer"],
-  "language": "FR",
   "is_target_location": true
 }}"""
 
