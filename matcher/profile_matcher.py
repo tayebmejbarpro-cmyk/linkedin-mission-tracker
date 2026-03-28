@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Optional
 
 import anthropic
 import requests
-from apify_client import ApifyClient
 from bs4 import BeautifulSoup
 
 from config.config import AppConfig
@@ -430,6 +429,12 @@ def _fetch_profile_via_apify(
     Returns:
         First item from the Apify dataset dict, or None on failure.
     """
+    try:
+        from apify_client import ApifyClient  # not installed while Apify is disabled
+    except ImportError as exc:
+        logger.warning("[matcher] apify_client not installed — profile fetch unavailable: %s", exc)
+        return None
+
     client = ApifyClient(apify_api_token)
     run_input = {"profileUrls": [profile_url]}
 
