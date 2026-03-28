@@ -19,8 +19,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from apify_client import ApifyClient
-
 from config.config import AppConfig
 
 # Apify actor to use for LinkedIn post search
@@ -188,6 +186,12 @@ def _run_apify_actor(
     """
     # Stagger concurrent starts to avoid simultaneous actor launches
     time.sleep(random.uniform(0.5, 2.0))
+
+    try:
+        from apify_client import ApifyClient  # not installed while Apify is disabled
+    except ImportError as exc:
+        logger.error("[scraper] apify_client not installed — Apify scraping unavailable: %s", exc)
+        return []
 
     client = ApifyClient(config.apify_api_token)
     run_input = {
