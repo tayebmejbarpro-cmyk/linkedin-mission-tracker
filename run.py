@@ -12,6 +12,7 @@ Can also be run locally: `python run.py`
 """
 
 import logging
+import os
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -96,6 +97,9 @@ def main() -> None:
     # Load .env for local development (no-op when env vars are already set)
     load_dotenv()
 
+    run_mode = os.getenv("RUN_MODE", "freelance").strip().lower()
+    logger.info("[run] RUN_MODE: %s", run_mode)
+
     try:
         # Import here so missing deps surface with a clear error after logging is set up
         from config.config import load_config
@@ -148,7 +152,8 @@ def main() -> None:
 
         # Step 3b — BeReach scraper (primary source)
         logger.info("[run] Starting BeReach scraping...")
-        bereach_posts = scrape_bereach(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
+        keyword_override = config.remote_keywords if run_mode == "job" else None
+        bereach_posts = scrape_bereach(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global, keyword_override=keyword_override)
         raw_posts.extend(bereach_posts)
         logger.info("[run] BeReach scraping complete — %d posts collected.", len(bereach_posts))
 
@@ -168,6 +173,7 @@ def main() -> None:
             raw_posts, config, logger,
             profile_vectors=profile_vectors,
             feedback_examples=feedback_examples,
+            scoring_mode=run_mode,
         )
         logger.info(
             "[run] Scoring complete — %d posts scored >= %d.",
@@ -197,7 +203,8 @@ def main() -> None:
 
         # Step 4 — Write to Sheets (seen sets passed for belt-and-suspenders dedup)
         logger.info("[run] Writing to Google Sheets...")
-        write_missions(enriched_posts, config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
+        tab_name_override = config.remote_tab if run_mode == "job" else None
+        write_missions(enriched_posts, config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global, tab_name_override=tab_name_override)
 
         # Final summary
         logger.info("=" * 60)

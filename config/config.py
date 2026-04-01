@@ -31,6 +31,8 @@ class AppConfig:
     min_match_score: int
     max_posts_per_country: int
     sheet_tab_format: str
+    remote_keywords: List[str]   # keywords used when RUN_MODE=job
+    remote_tab: str              # sheet tab name for remote job results
 
 
 
@@ -108,6 +110,8 @@ def load_config() -> AppConfig:
         min_match_score=min_match_score,
         max_posts_per_country=int(settings.get("MAX_POSTS_PER_COUNTRY", 50)),
         sheet_tab_format=settings.get("SHEET_TAB_FORMAT", "Missions_{YYYY-MM}"),
+        remote_keywords=settings.get("REMOTE_KEYWORDS", []),
+        remote_tab=settings.get("REMOTE_TAB", "Remote"),
         bereach_api_token=bereach_api_token,
     )
 

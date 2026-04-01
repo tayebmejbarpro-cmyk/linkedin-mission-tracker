@@ -272,6 +272,7 @@ def score_posts(
     logger: logging.Logger,
     profile_vectors: Optional[Dict[str, Dict[str, str]]] = None,
     feedback_examples: Optional[List[Dict[str, str]]] = None,
+    scoring_mode: str = "freelance",
 ) -> List[EnrichedPost]:
     """
     Main entry point for the matcher module.
@@ -328,6 +329,7 @@ def score_posts(
                 _score_post_with_claude, post, profiles, anthropic_client, logger,
                 _countries,
                 feedback_examples or [],
+                scoring_mode,
             ): post
             for post in candidates
         }
@@ -667,6 +669,7 @@ def _score_post_with_claude(
     logger: logging.Logger,
     target_countries: Optional[List[str]] = None,
     feedback_examples: Optional[List[Dict[str, str]]] = None,
+    scoring_mode: str = "freelance",
 ) -> Dict[str, Any]:
     """
     Call the Claude API to extract structured mission data and compute a match score.
@@ -690,7 +693,7 @@ def _score_post_with_claude(
     time.sleep(random.uniform(_WORKER_DELAY_MIN, _WORKER_DELAY_MAX))
 
     _countries = target_countries or ["France", "Maroc"]
-    prompt = _build_claude_prompt(post.get("post_text", ""), profiles, _countries, feedback_examples or [])
+    prompt = _build_claude_prompt(post.get("post_text", ""), profiles, _countries, feedback_examples or [], scoring_mode=scoring_mode)
     backoff_seconds = [10, 20, 40]
 
     for attempt in range(4):  # 1 initial + 3 retries
@@ -731,6 +734,7 @@ def _build_claude_prompt(
     profiles: List[Dict[str, str]],
     target_countries: List[str],
     feedback_examples: Optional[List[Dict[str, str]]] = None,
+    scoring_mode: str = "freelance",
 ) -> str:
     """
     Construct the structured extraction prompt sent to Claude.
@@ -744,6 +748,7 @@ def _build_claude_prompt(
         profiles: List of profile dicts with 'name' and 'vector' keys.
         target_countries: List of target country names from config (e.g. ["France", "Maroc"]).
         feedback_examples: Optional list of past feedback dicts to guide scoring.
+        scoring_mode: "freelance" (default) or "job" — selects prompt sections for each pipeline.
 
     Returns:
         Complete prompt string.
@@ -787,6 +792,108 @@ def _build_claude_prompt(
     if feedback_examples:
         feedback_section = _build_calibration_table(feedback_examples)
 
+    # --- Mode-sensitive prompt sections ---
+    if scoring_mode == "job":
+        is_genuine_field_desc = (
+            "boolean — TRUE only if a company, recruiter, or ESN is SEEKING a full-remote employee "
+            "or contractor (CDI, CDD, or freelance). FALSE if: personal branding, availability "
+            "announcement, article, opinion, or a position already filled."
+        )
+        critical_rule_section = """\
+## Critical rule — is_genuine_mission:
+Set is_genuine_mission=false (and match_score=0) when:
+- A freelancer or consultant announces THEIR OWN availability
+- The post is personal branding, self-promotion, or an availability announcement
+- The post is an opinion, article, news, or general content not offering a specific role
+- The post announces a position has been FILLED or closed (e.g. "poste pourvu",
+  "nous avons trouvé notre candidat", "clôturé", "profil retenu")
+
+Set is_genuine_mission=true only when:
+- A company, recruiter, manager, or ESN is explicitly LOOKING FOR someone to fill a
+  full-remote role (CDI, CDD, or freelance contract)
+- The post describes a role to be filled (skills required, contract type, start date)"""
+        geo_rule_section = """\
+## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
+
+These search queries already contain "full remote" or "100% télétravail".
+Most posts will be remote-first. Apply this simplified geographic filter:
+
+Set is_target_location=true when:
+  → The role is explicitly fully remote (full remote, 100% télétravail, remote-first)
+  → The employer is based in Europe or a France-adjacent francophone country
+    (France, Belgium, Switzerland, Luxembourg, Morocco, Tunisia, Senegal, Ivory Coast…)
+  → The location is "worldwide remote" or unspecified (safety net)
+  → Location is completely unknown after analysis (safety net)
+
+Set is_target_location=false when:
+  → The post explicitly requires physical presence in the Americas or Asia-Pacific
+  → The post explicitly states on-site only outside Europe
+
+SPECIAL RULE — if is_genuine_mission=false:
+  Always return is_target_location=true.
+
+ANTI-HALLUCINATION RULES:
+  - A post written in French is NOT sufficient to conclude the role is France-based.
+  - Do not infer a timezone requirement from the author's profile location.
+  - When genuinely uncertain → return true (safety net)."""
+    else:
+        is_genuine_field_desc = (
+            "boolean — TRUE only if a company/recruiter/ESN is SEEKING a freelancer. "
+            "FALSE if: a freelancer advertises their own availability, a personal branding post, "
+            "an opinion/news article, or any post NOT offering a mission to fill."
+        )
+        critical_rule_section = f"""\
+## Critical rule — is_genuine_mission:
+Set is_genuine_mission=false (and match_score=0) when:
+- A freelancer or consultant announces THEIR OWN availability (e.g. "Je suis disponible pour une mission...")
+- The post is personal branding, self-promotion, or availability announcement
+- The post is an opinion, article, news, or general content not offering a specific role
+- The author IS the consultant, not the client
+- The post announces a mission has been FILLED or closed (e.g. "mission pourvue", "poste pourvu", "nous avons trouvé notre candidat", "clôturé", "profil retenu")
+
+Set is_genuine_mission=true only when:
+- A company, recruiter, manager, or ESN is explicitly LOOKING FOR someone to fill a role
+- The post describes a mission/role to be filled (skills required, duration, rate, location)"""
+        geo_rule_section = f"""\
+## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
+
+Determine if the mission is physically located in {countries_display}.
+
+STEP 1 — Look for an explicit location in the post text:
+  - City name, region, department (Paris, Lyon, Île-de-France, Casablanca, Rabat...)
+  - Geographic hashtags (#paris #idf #maroc #casablanca #freelancefrance)
+  - Direct country mention
+
+STEP 2 — If no explicit location, analyze implicit signals:
+  - TJM/rate expressed in € (€) → strong indicator of France
+  - Post written entirely in French with ESN/freelance context → likely France
+  - Known French ESN or company mentioned → likely France
+  - Foreign currency (£, $, CHF) or explicit foreign country → not target
+
+DECISION RULES — set is_target_location to:
+{countries_true_bullets}
+  → true  if mission is "Remote" / "Télétravail" / "Full Remote" (location-independent)
+  → true  if location is completely unknown after analysis (safety net — do not lose opportunities)
+  → false if mission is explicitly in a country not listed above
+  → false if mission is in DOM-TOM: La Réunion, Guadeloupe, Martinique, Guyane,
+           Mayotte, Nouvelle-Calédonie, Polynésie française
+
+SPECIAL RULE — if is_genuine_mission=false:
+  Always return is_target_location=true. The post is already excluded by match_score=0
+  and geo analysis is irrelevant.
+
+ANTI-HALLUCINATION RULES:
+  - Never infer a city from the author's name or company name alone.
+  - "Near the border" or "accessible from Paris" does NOT make Brussels or Luxembourg a target.
+  - A French-sounding company name does not guarantee the mission is in France.
+  - When genuinely uncertain between France and another country → return true (safety net)."""
+
+    task_description = (
+        "a GENUINE MISSION OFFER (a company, recruiter, or ESN seeking a freelancer or employee for a full-remote role)"
+        if scoring_mode == "job"
+        else "a GENUINE MISSION OFFER (a company, recruiter, or ESN seeking a freelancer)"
+    )
+
     return f"""You are analyzing a LinkedIn post that may describe a freelance mission opportunity.
 
 ## LinkedIn Post:
@@ -795,7 +902,7 @@ def _build_claude_prompt(
 {profile_section}
 
 {feedback_section}## Task:
-1. Determine if this post is a GENUINE MISSION OFFER (a company, recruiter, or ESN seeking a freelancer).
+1. Determine if this post is {task_description}.
 2. If genuine, extract mission details and score the profile match.
 3. If NOT genuine, set is_genuine_mission=false and match_score=0.
 
@@ -803,7 +910,7 @@ Respond with ONLY a valid JSON object — no preamble, no markdown fences, no ex
 
 ## Required JSON fields:
 {{
-  "is_genuine_mission": "boolean — TRUE only if a company/recruiter/ESN is SEEKING a freelancer. FALSE if: a freelancer advertises their own availability, a personal branding post, an opinion/news article, or any post NOT offering a mission to fill.",
+  "is_genuine_mission": "{is_genuine_field_desc}",
   "mission_title": "string — short title of the mission or role (e.g. 'Chef de projet Data'), empty string if not a genuine mission",
   "required_skills": ["canonical skill names — use standard terms (e.g. 'PMO', 'ITSM', 'Business Analyst', 'Chef de projet', 'Product Owner'). Max 8 skills."],
   "duration": "string — mission duration or contract length (e.g. '3 mois', 'CDI', 'unknown')",
@@ -822,17 +929,7 @@ Match types: direct match | vocabulary equivalence | adjacent domain | no match
 Example: "Pilotage PMO requis ↔ expérience PMO confirmée (direct match)"
 If is_genuine_mission=false: use a single entry explaining why (e.g. "Post is a freelancer advertising their own availability, not a mission offer").
 
-## Critical rule — is_genuine_mission:
-Set is_genuine_mission=false (and match_score=0) when:
-- A freelancer or consultant announces THEIR OWN availability (e.g. "Je suis disponible pour une mission...")
-- The post is personal branding, self-promotion, or availability announcement
-- The post is an opinion, article, news, or general content not offering a specific role
-- The author IS the consultant, not the client
-- The post announces a mission has been FILLED or closed (e.g. "mission pourvue", "poste pourvu", "nous avons trouvé notre candidat", "clôturé", "profil retenu")
-
-Set is_genuine_mission=true only when:
-- A company, recruiter, manager, or ESN is explicitly LOOKING FOR someone to fill a role
-- The post describes a mission/role to be filled (skills required, duration, rate, location)
+{critical_rule_section}
 
 ## Scoring guidelines (only applies when is_genuine_mission=true):
 
@@ -873,38 +970,7 @@ domain but uses slightly different vocabulary — favor the higher score band.
 A score of 50 means "worth reviewing by the consultant", not "perfect match required".
 Do NOT penalize for skills the profile does not mention explicitly if the broader domain matches.
 
-## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
-
-Determine if the mission is physically located in {countries_display}.
-
-STEP 1 — Look for an explicit location in the post text:
-  - City name, region, department (Paris, Lyon, Île-de-France, Casablanca, Rabat...)
-  - Geographic hashtags (#paris #idf #maroc #casablanca #freelancefrance)
-  - Direct country mention
-
-STEP 2 — If no explicit location, analyze implicit signals:
-  - TJM/rate expressed in € (€) → strong indicator of France
-  - Post written entirely in French with ESN/freelance context → likely France
-  - Known French ESN or company mentioned → likely France
-  - Foreign currency (£, $, CHF) or explicit foreign country → not target
-
-DECISION RULES — set is_target_location to:
-{countries_true_bullets}
-  → true  if mission is "Remote" / "Télétravail" / "Full Remote" (location-independent)
-  → true  if location is completely unknown after analysis (safety net — do not lose opportunities)
-  → false if mission is explicitly in a country not listed above
-  → false if mission is in DOM-TOM: La Réunion, Guadeloupe, Martinique, Guyane,
-           Mayotte, Nouvelle-Calédonie, Polynésie française
-
-SPECIAL RULE — if is_genuine_mission=false:
-  Always return is_target_location=true. The post is already excluded by match_score=0
-  and geo analysis is irrelevant.
-
-ANTI-HALLUCINATION RULES:
-  - Never infer a city from the author's name or company name alone.
-  - "Near the border" or "accessible from Paris" does NOT make Brussels or Luxembourg a target.
-  - A French-sounding company name does not guarantee the mission is in France.
-  - When genuinely uncertain between France and another country → return true (safety net).
+{geo_rule_section}
 
 ## Example output (genuine mission — vocabulary equivalence, high score):
 {{

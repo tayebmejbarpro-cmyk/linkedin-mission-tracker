@@ -44,6 +44,7 @@ def scrape_bereach(
     logger: logging.Logger,
     seen_urls: Optional[Set[str]] = None,
     seen_hashes: Optional[Set[str]] = None,
+    keyword_override: Optional[List[str]] = None,
 ) -> List[RawPost]:
     """
     Fetch LinkedIn posts from the BeReach API for all keywords in config.
@@ -62,6 +63,8 @@ def scrape_bereach(
         logger: Logger instance.
         seen_urls: Optional set of post URLs already written in previous runs.
         seen_hashes: Optional set of text hashes already written in previous runs.
+        keyword_override: If provided, use these keywords instead of config.search_keywords.
+                          Used by the remote jobs pipeline (RUN_MODE=job).
 
     Returns:
         List of deduplicated RawPost dicts, all published within the last 24 hours.
@@ -69,8 +72,8 @@ def scrape_bereach(
     seen_urls_global: Set[str] = seen_urls if seen_urls is not None else set()
     seen_hashes_global: Set[str] = seen_hashes if seen_hashes is not None else set()
 
-    # Use keywords from config as-is — no country suffix
-    keyword_queries: List[str] = list(config.search_keywords)
+    # Use keyword_override if provided (remote jobs pipeline), else fall back to config
+    keyword_queries: List[str] = list(keyword_override) if keyword_override else list(config.search_keywords)
 
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     headers = {

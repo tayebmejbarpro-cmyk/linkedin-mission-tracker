@@ -11,5 +11,12 @@
   ],
   "MIN_MATCH_SCORE": 40,
   "MAX_POSTS_PER_COUNTRY": 50,
-  "SHEET_TAB_FORMAT": "Missions"
+  "SHEET_TAB_FORMAT": "Missions",
+  "REMOTE_KEYWORDS": [
+    "(\"full remote\" OR \"100% télétravail\") AND (\"PMO\" OR \"chef de projet\")",
+    "(\"full remote\" OR \"100% télétravail\") AND (\"ITSM\" OR \"ServiceNow\" OR \"Incident Manager\")",
+    "(\"full remote\" OR \"100% télétravail\") AND (\"business analyst\" OR \"Product Owner\")",
+    "(\"full remote\" OR \"100% remote\") AND (\"Service Delivery\" OR \"SDM\" OR \"pilotage\")"
+  ],
+  "REMOTE_TAB": "Remote"
 }

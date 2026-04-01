@@ -1,9 +1,9 @@
-name: Daily LinkedIn Freelance Mission Extract
+name: Daily LinkedIn Remote Job Extract
 
 on:
   schedule:
-    # 06:00 UTC daily = 08:00 CEST (summer) / 07:00 CET (winter)
-    - cron: '0 6 * * *'
+    # 06:30 UTC daily = 30 min after the freelance pipeline (avoids dedup race)
+    - cron: '30 6 * * *'
   workflow_dispatch:
     # Allows manual trigger from the GitHub Actions UI for testing
 
@@ -12,9 +12,9 @@ env:
 
 jobs:
   extract:
-    name: Extract Freelance Missions
+    name: Extract Remote Jobs
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Hard limit — prevents runaway Apify polling
+    timeout-minutes: 30
     environment: APIFY_API_TOKEN  # GitHub environment where secrets are stored
 
     steps:
@@ -25,14 +25,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'  # Caches pip deps between runs (~5s vs ~60s install time)
+          cache: 'pip'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run extraction pipeline
+      - name: Run remote job extraction pipeline
         env:
-          RUN_MODE: freelance
+          RUN_MODE: job
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -41,10 +41,10 @@ jobs:
         run: python run.py
 
       - name: Upload run logs
-        if: always()  # Upload even if the pipeline step failed — critical for debugging
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: run-logs-${{ github.run_id }}
+          name: remote-logs-${{ github.run_id }}
           path: logs/
           retention-days: 30
 
@@ -52,6 +52,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: raw-data-${{ github.run_id }}
+          name: remote-data-${{ github.run_id }}
           path: data/
           retention-days: 7

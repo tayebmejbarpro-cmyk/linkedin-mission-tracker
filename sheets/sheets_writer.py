@@ -281,6 +281,8 @@ def sync_config_tab(
     profiles = overrides.get("profiles") or config.linkedin_profiles
     countries = overrides.get("countries") or config.target_countries
     keywords = overrides.get("keywords") or config.search_keywords
+    remote_keywords = overrides.get("remote_keywords") or config.remote_keywords
+    remote_tab = overrides.get("remote_tab") or config.remote_tab
     min_score = overrides.get("score_minimum", config.min_match_score)
     max_posts = overrides.get("posts_max_par_pays", config.max_posts_per_country)
 
@@ -294,6 +296,8 @@ def sync_config_tab(
         linkedin_profiles=profiles[:3],  # max 3 profiles
         target_countries=countries,
         search_keywords=keywords,
+        remote_keywords=remote_keywords,
+        remote_tab=remote_tab,
         min_match_score=int(min_score),
         max_posts_per_country=int(max_posts),
     )
@@ -449,6 +453,12 @@ def _create_config_tab(
     for kw in keywords_padded[:6]:
         rows.append(["keyword", kw, ""])
 
+    rows.append(["# Mots-clés Remote (max 6 requêtes full-remote)", "", ""])
+    remote_kw_padded = list(config.remote_keywords) + [""] * 6
+    for kw in remote_kw_padded[:6]:
+        rows.append(["remote_keyword", kw, ""])
+    rows.append(["remote_tab", config.remote_tab, ""])
+
     rows += [
         ["# Filtres", "", ""],
         ["score_minimum", str(config.min_match_score), ""],
@@ -496,7 +506,7 @@ def _read_config_tab(
         return {}
 
     rows = result.get("values", [])
-    overrides: Dict[str, Any] = {"countries": [], "keywords": [], "profiles": []}
+    overrides: Dict[str, Any] = {"countries": [], "keywords": [], "profiles": [], "remote_keywords": []}
 
     for row in rows:
         if not row:
@@ -514,6 +524,10 @@ def _read_config_tab(
             overrides["countries"].append(val1)
         elif key == "keyword" and val1:
             overrides["keywords"].append(val1)
+        elif key == "remote_keyword" and val1:
+            overrides["remote_keywords"].append(val1)
+        elif key == "remote_tab" and val1:
+            overrides["remote_tab"] = val1
         elif key == "score_minimum" and val1:
             try:
                 overrides["score_minimum"] = int(val1)
@@ -603,6 +617,7 @@ def write_missions(
     logger: logging.Logger,
     seen_urls: Optional[Set[str]] = None,
     seen_hashes: Optional[Set[str]] = None,
+    tab_name_override: Optional[str] = None,
 ) -> None:
     """
     Full write pipeline: authenticate → get/create tab → deduplicate →
@@ -624,8 +639,10 @@ def write_missions(
         logger: Logger instance.
         seen_urls: Set of post URLs already in the sheet (all tabs, pre-loaded).
         seen_hashes: Set of text hashes already in the sheet (pre-loaded).
+        tab_name_override: If provided, write to this tab instead of the config-derived name.
+                           Used by the remote jobs pipeline (RUN_MODE=job).
     """
-    tab_name = _build_tab_name(config.sheet_tab_format)
+    tab_name = tab_name_override if tab_name_override else _build_tab_name(config.sheet_tab_format)
 
     try:
         service = _get_sheets_service(config.google_service_account_json)
