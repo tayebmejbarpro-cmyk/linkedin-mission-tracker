@@ -11,5 +11,5 @@
   ],
   "MIN_MATCH_SCORE": 40,
   "MAX_POSTS_PER_COUNTRY": 50,
-  "SHEET_TAB_FORMAT": "Missions_{YYYY-MM}"
+  "SHEET_TAB_FORMAT": "Missions"
 }
