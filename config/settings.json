@@ -4,12 +4,16 @@
   ],
   "TARGET_COUNTRIES": ["France", "Morocco"],
   "SEARCH_KEYWORDS": [
-    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"PMO\" OR \"chef de projet\")",
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"PMO\" OR \"chef de projet SI\" OR \"chef de projet IT\" OR \"pilotage de projet\")",
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"chef de projet\" OR \"gestion de projet\") AND (\"transformation\" OR \"ITSM\" OR \"run\" OR \"MOE\" OR \"MOA\")",
     "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"itsm\" OR \"Run\")",
     "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"business analyst\" OR \"Product Owner\")",
-    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"ServiceNow\" OR \"Incident\")"
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"ServiceNow\" OR \"Incident\")",
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"Service Delivery\" OR \"SDM\" OR \"delivery manager\")",
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"Incident Manager\" OR \"Major Incident\" OR \"Run Management\" OR \"MCO\")",
+    "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"Change Manager\" OR \"conduite du changement\" OR \"accompagnement au changement\")"
   ],
-  "MIN_MATCH_SCORE": 40,
+  "MIN_MATCH_SCORE": 65,
   "MAX_POSTS_PER_COUNTRY": 50,
   "SHEET_TAB_FORMAT": "Missions",
   "REMOTE_KEYWORDS": [

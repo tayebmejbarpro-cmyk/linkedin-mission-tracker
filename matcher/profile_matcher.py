@@ -850,10 +850,21 @@ Set is_genuine_mission=false (and match_score=0) when:
 - The post is an opinion, article, news, or general content not offering a specific role
 - The author IS the consultant, not the client
 - The post announces a mission has been FILLED or closed (e.g. "mission pourvue", "poste pourvu", "nous avons trouvé notre candidat", "clôturé", "profil retenu")
+- The post lists 3 or more unrelated job titles or role types without describing a single specific mission (e.g. "we're looking for a DevOps OR a PMO OR a Data Scientist")
+- The post promotes a talent network, talent community, or multi-sector recruitment platform (e.g. "join our network", "we hire across sectors")
 
 Set is_genuine_mission=true only when:
 - A company, recruiter, manager, or ESN is explicitly LOOKING FOR someone to fill a role
-- The post describes a mission/role to be filled (skills required, duration, rate, location)"""
+- The post describes a mission/role to be filled (skills required, duration, rate, location)
+
+## Domain rejection — set match_score <= 35 when the PRIMARY requirement is:
+- Scrum Master or Agile Coach as the MAIN role (not PMO who also facilitates ceremonies)
+- Data Scientist, ML Engineer, or AI/LLM specialist as PRIMARY (not a data-driven PM)
+- SAP/ERP specialist (FICO, SD, MM, S4HANA) as PRIMARY — AMOA in an SAP context is fine
+- DevOps Engineer, SRE, or Infrastructure specialist as PRIMARY
+- CyberSecurity, SOC, SIEM, or Pentest specialist — NOTE: "RSSI RUN" with ITSM context is NOT this
+- Solution/Enterprise/Cloud Architect as PRIMARY
+A "Chef de projet" title does not override a primary technical requirement in the above domains."""
         geo_rule_section = f"""\
 ## GEO RULE — is_target_location (evaluated AFTER scoring, independent of match_score):
 
@@ -963,12 +974,20 @@ SKILL EQUIVALENCES — treat these pairs as synonyms when scoring:
    = "Business Analyst"
 - "PO" / "responsable produit" / "Product Manager" / "proxy PO"
    = "Product Owner"
+- "RSSI RUN" / "Gouvernance SI opérationnelle" / "Responsable service IT en Run"
+   = Run Management / ITSM operations (NOT cybersecurity — RSSI RUN is IT operations governance, not infosec)
 
 SCORING BIAS CORRECTION:
 This consultant is ACTIVELY SEEKING missions. When a mission clearly falls within his
 domain but uses slightly different vocabulary — favor the higher score band.
 A score of 50 means "worth reviewing by the consultant", not "perfect match required".
 Do NOT penalize for skills the profile does not mention explicitly if the broader domain matches.
+
+MIXED DOMAIN RULE — when a post combines Mohamed's core domain WITH a non-core domain:
+Score based on the HIGHEST-MATCHING component, not the average.
+Example: "Directeur de projet + AMOA + GenAI/ML" → PMO/AMOA = 72, GenAI = 20 → score 72.
+Example: "Gouvernance SSI + RSSI RUN + ITSM" → RUN/ITSM = 78, SSI governance = 40 → score 78.
+Rationale: Mohamed applies for the project management component even if he lacks a secondary skill.
 
 {geo_rule_section}
 
