@@ -2,7 +2,7 @@
 
 name: profile-matcher
 
-description: Fetches LinkedIn profile(s) via Apify (with sheet caching), then scores each scraped
+description: Fetches LinkedIn profile(s) via BeReach API (with sheet caching), then scores each scraped
   post for relevance using Claude Haiku. Returns enriched post dicts with match_score, extracted
   mission details, and geo-filter flag. Handles multi-profile scoring.
 
@@ -16,11 +16,11 @@ description: Fetches LinkedIn profile(s) via Apify (with sheet caching), then sc
 
 &nbsp;  - Check `Profils_Cache` sheet tab for a cached profile vector (refreshed once per day).
 
-&nbsp;  - On cache miss, fetch the LinkedIn profile HTML via the Apify LinkedIn Profile Scraper actor.
+&nbsp;  - On cache miss, fetch the LinkedIn profile via the BeReach API (`POST /visit/linkedin/profile`).
 
-&nbsp;  - Parse HTML with BeautifulSoup to extract skills, titles, headline, about, certifications.
+&nbsp;  - Extract name, headline, location, company, about, experience, and skills from the response.
 
-&nbsp;  - On Apify failure, fall back to a generic `_FALLBACK_PROFILE` string (never crashes).
+&nbsp;  - On BeReach failure, fall back to HTTP scrape with BeautifulSoup, then `_FALLBACK_PROFILE` (never crashes).
 
 &nbsp;  - Save updated vectors to `Profils_Cache` for next run.
 
@@ -68,5 +68,5 @@ description: Fetches LinkedIn profile(s) via Apify (with sheet caching), then sc
 
 \- `ANTHROPIC_API_KEY`: Claude API key
 
-\- `APIFY_API_TOKEN`: used for profile fetching via Apify
+\- `BEREACH_API_TOKEN`: used for profile fetching via BeReach API
 

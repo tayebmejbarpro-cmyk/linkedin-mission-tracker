@@ -1,8 +1,8 @@
 {
   "LINKEDIN_PROFILES": [
-    {"name": "Mohamed", "url": "https://www.linkedin.com/in/mohamed-sid-ahmed/"}
+    {"name": "YOUR_NAME", "url": "https://www.linkedin.com/in/YOUR_LINKEDIN_PROFILE/"}
   ],
-  "TARGET_COUNTRIES": ["France", "Morocco"],
+  "TARGET_COUNTRIES": ["France", "Germany"],
   "SEARCH_KEYWORDS": [
     "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"PMO\" OR \"chef de projet SI\" OR \"chef de projet IT\" OR \"pilotage de projet\")",
     "(\"mission\" OR \"besoin\") AND (\"freelance\" OR \"tjm\") AND (\"chef de projet\" OR \"gestion de projet\") AND (\"transformation\" OR \"ITSM\" OR \"run\" OR \"MOE\" OR \"MOA\")",

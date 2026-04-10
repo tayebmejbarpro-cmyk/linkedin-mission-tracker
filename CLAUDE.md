@@ -6,7 +6,7 @@
 
 Daily automation that discovers freelance mission posts on LinkedIn for specified countries,
 
-scores them against my profile, and writes structured data to Google Sheets.
+scores them against a consultant profile using Claude AI, and writes structured data to Google Sheets.
 
 
 
@@ -16,9 +16,23 @@ scores them against my profile, and writes structured data to Google Sheets.
 
 \- Modules: `scraper/`, `matcher/`, `sheets/`, `config/`
 
-\- Config: `.env` for secrets, `config/settings.json` for user preferences
+\- Config: `.env` for secrets, `config/settings.json` for placeholder defaults only
+
+\- Runtime config: Google Sheets `Paramètres` tab overrides `settings.json` at startup
 
 \- CI/CD: `.github/workflows/daily_extract.yml` — runs every day at 06:00 UTC (= 08:00 CEST / 07:00 CET)
+
+\- Second pipeline: `.github/workflows/daily_remote.yml` — remote jobs, 06:30 UTC
+
+
+
+\## Config Flow
+
+1\. `config/settings.json` — placeholder template committed to git (no personal data)
+
+2\. `sync_config_tab()` — reads `Paramètres` tab from Google Sheet and overrides all settings
+
+3\. Placeholder guard in `run.py` — raises `EnvironmentError` if `LINKEDIN_PROFILES` still contains `YOUR_` values after step 2
 
 
 
@@ -42,19 +56,25 @@ scores them against my profile, and writes structured data to Google Sheets.
 
 \## Key Files
 
-\- `config/settings.json`: MY\_LINKEDIN\_URL, TARGET\_COUNTRIES, SHEET\_ID, KEYWORDS
+\- `config/settings.json`: placeholder template — fields: `LINKEDIN_PROFILES`, `TARGET_COUNTRIES`, `SEARCH_KEYWORDS`, `REMOTE_KEYWORDS`, `MIN_MATCH_SCORE`, `MAX_POSTS_PER_COUNTRY`
 
-\- `skills/linkedin-scraper/SKILL.md`: scraping logic instructions
+\- `~.claude/skills/linkedin-scraper/SKILL.md`: scraping logic instructions (BeReach API)
 
-\- `skills/profile-matcher/SKILL.md`: scoring logic instructions
+\- `~.claude/skills/profile-matcher/SKILL.md`: scoring logic instructions (BeReach profile fetch + Claude Haiku)
 
-\- `skills/sheets-writer/SKILL.md`: Google Sheets write instructions
+\- `~.claude/skills/sheets-writer/SKILL.md`: Google Sheets write instructions
+
+\- `QUICKSTART.md`: new user setup guide (Google Sheets template → fill Paramètres → set secrets → run)
+
+\- `CONTRIBUTING.md`: fork and customization guide
 
 
 
 \## GitHub Actions Setup
 
-\- Workflow file: `.github/workflows/daily_extract.yml`
+\- Workflow file: `.github/workflows/daily_extract.yml` (freelance missions, 06:00 UTC)
+
+\- Workflow file: `.github/workflows/daily_remote.yml` (remote jobs, 06:30 UTC)
 
 \- Schedule: `cron: '0 6 * * *'` (06:00 UTC = 08:00 CEST in summer, 07:00 CET in winter)
 
@@ -68,9 +88,18 @@ scores them against my profile, and writes structured data to Google Sheets.
 
 \## Environment Variables Required
 
-APIFY\_API\_TOKEN, ANTHROPIC\_API\_KEY, BEREACH\_API\_TOKEN,
+ANTHROPIC\_API\_KEY, BEREACH\_API\_TOKEN,
 
 GOOGLE\_SERVICE\_ACCOUNT\_JSON, SPREADSHEET\_ID
 
+
+
+\## APIs Used
+
+\- **BeReach** (`https://api.berea.ch`): post scraping (`/search/linkedin/posts`) + profile fetching (`/visit/linkedin/profile`)
+
+\- **Anthropic Claude Haiku**: post scoring and mission extraction
+
+\- **Google Sheets API**: config sync, results storage, dedup index, profile cache
 
 

@@ -1,9 +1,10 @@
 """
 scripts/fix_profile_cache.py — One-off script to overwrite the Profils_Cache
-tab with Mohamed's correct profile vector, built from his CV.
+tab with your profile vector, built from your CV / LinkedIn profile.
 
 Usage:
-    python scripts/fix_profile_cache.py
+    1. Fill in PROFILE_NAME, PROFILE_URL, and PROFILE_VECTOR below.
+    2. Run: python scripts/fix_profile_cache.py
 
 Requires GOOGLE_SERVICE_ACCOUNT_JSON and SPREADSHEET_ID to be set in the
 environment (or in a local .env file loaded via python-dotenv).
@@ -23,27 +24,19 @@ except ImportError:
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# ── Correct profile vector built from CV ─────────────────────────────────────
-PROFILE_NAME = "Mohamed"
-PROFILE_URL  = "https://www.linkedin.com/in/mohamed-sid-ahmed/"
+# ── Fill in your profile details below ───────────────────────────────────────
+# PROFILE_NAME  : displayed name (must match the name in Paramètres tab)
+# PROFILE_URL   : your LinkedIn public profile URL
+# PROFILE_VECTOR: pipe-separated string describing your profile. Format:
+#   "Full Name | Headline | Location | About summary | Job1 | Job2 | Skills: ..."
+PROFILE_NAME = "YOUR_NAME"
+PROFILE_URL  = "https://www.linkedin.com/in/YOUR_LINKEDIN_PROFILE/"
 PROFILE_VECTOR = (
-    "Mohamed SID AHMED | Service Delivery Manager - PMO | Bois d'Arcy, France | "
-    "14 ans d'expertise en service delivery, gestion de projet et business intelligence. "
-    "Excellence opérationnelle et transformation de la donnée en insight décisionnel. "
-    "Disponible immédiatement. International. | "
-    "Service Delivery Manager at L'OREAL | "
-    "PMO Data at L'OREAL | "
-    "PMO Data at Umanis | "
-    "Chef de Projet Lean at Sealed Air | "
-    "Chef de Projet at PSA Groupe | "
-    "Skills: ServiceNow, Anaplan, Power BI, Python, SQL, DAX, VBA, Power Automate, "
-    "Tableau, Dataiku, Machine Learning, Confluence, GitHub, Elasticsearch, Minitab, "
-    "Lean Six Sigma, Gestion de projet, Agile, ITSM, Run Management, "
-    "Amélioration continue, Gestion des stakeholders, Data-driven | "
-    "Certifications: ITIL 4 Foundation, PSPO I (Scrum.org), Lean Six Sigma Green Belt, "
-    "Power BI Data Analyst Associate, ML Practitioner Dataiku, Tableau Desktop Specialist | "
-    "Formation: Data Scientist CentraleSupélec (2022), Mastère Excellence Opérationnelle INSA Rennes (2015), "
-    "Ingénieur Génie Industriel EIGSI La Rochelle (2013)"
+    "YOUR_FULL_NAME | YOUR_HEADLINE | YOUR_LOCATION | "
+    "YOUR_ABOUT_SUMMARY | "
+    "YOUR_JOB_1 | "
+    "YOUR_JOB_2 | "
+    "Skills: YOUR_SKILLS"
 )
 # ─────────────────────────────────────────────────────────────────────────────
 

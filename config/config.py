@@ -18,7 +18,6 @@ class AppConfig:
     """Fully validated application configuration."""
 
     # From environment variables
-    apify_api_token: str
     anthropic_api_key: str
     google_service_account_json: str  # raw JSON string, parsed in-memory — never written to disk
     spreadsheet_id: str
@@ -49,7 +48,6 @@ def load_config() -> AppConfig:
         str(Path(__file__).parent / "settings.json")
     )
 
-    apify_api_token = _require_env("APIFY_API_TOKEN")
     anthropic_api_key = _require_env("ANTHROPIC_API_KEY")
     google_service_account_json = _require_env("GOOGLE_SERVICE_ACCOUNT_JSON")
     spreadsheet_id = _require_env("SPREADSHEET_ID")
@@ -100,7 +98,6 @@ def load_config() -> AppConfig:
         )
 
     return AppConfig(
-        apify_api_token=apify_api_token,
         anthropic_api_key=anthropic_api_key,
         google_service_account_json=google_service_account_json,
         spreadsheet_id=spreadsheet_id,

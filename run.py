@@ -3,7 +3,7 @@ run.py — Entry point for the LinkedIn Freelance Mission Tracker.
 
 Orchestrates the full pipeline:
   1. Load config (fail fast if env vars missing)
-  2. Scrape LinkedIn posts via Apify
+  2. Scrape LinkedIn posts via BeReach
   3. Score posts via Claude API
   4. Write results to Google Sheets
 
@@ -78,7 +78,7 @@ def main() -> None:
       2. Load .env (no-op in GitHub Actions where secrets are injected natively)
       3. Load and validate config (raises on missing env vars → exit 1)
       4. Load cross-run dedup index from Google Sheet
-      5. Scrape posts via Apify (known posts filtered before scoring)
+      5. Scrape posts via BeReach (known posts filtered before scoring)
       6. Score posts via Claude API
       7. Write to Google Sheets + update Dedup_Index
       8. Log final summary
@@ -103,7 +103,7 @@ def main() -> None:
     try:
         # Import here so missing deps surface with a clear error after logging is set up
         from config.config import load_config
-        from scraper import scrape_all_countries, scrape_bereach
+        from scraper import scrape_bereach
         from matcher import score_posts, fetch_profile_vectors
         from sheets import write_missions, sync_config_tab, load_profile_vectors, save_profile_vectors, load_feedback_examples, load_seen_posts_all_tabs, index_rejected_posts
 
@@ -115,6 +115,19 @@ def main() -> None:
         logger.info("[run] Syncing config with Google Sheets 'Paramètres' tab...")
         config = sync_config_tab(config, logger)
 
+        # Guard: detect unfilled placeholder values after sheet override
+        _placeholder_profiles = [
+            p for p in config.linkedin_profiles
+            if "YOUR_" in p.get("url", "") or "YOUR_" in p.get("name", "")
+        ]
+        if _placeholder_profiles:
+            raise EnvironmentError(
+                "Placeholder values detected in LINKEDIN_PROFILES. "
+                "Open the 'Paramètres' tab in your Google Sheet and replace "
+                "the YOUR_NAME / YOUR_LINKEDIN_PROFILE values with your real profile, "
+                "then re-run."
+            )
+
         logger.info(
             "[run] Config ready. Countries: %s | Keywords: %d | Min score: %d",
             config.target_countries,
@@ -122,8 +135,8 @@ def main() -> None:
             config.min_match_score,
         )
 
-        # Step 1c — Load cached profile vectors from sheet; fetch missing via Apify
-        logger.info("[run] Loading profile vectors (from cache or Apify)...")
+        # Step 1c — Load cached profile vectors from sheet; fetch missing via BeReach
+        logger.info("[run] Loading profile vectors (from cache or BeReach)...")
         cached_vectors = load_profile_vectors(config, logger)
         profile_vectors = fetch_profile_vectors(config, logger, cached=cached_vectors)
 
@@ -133,7 +146,7 @@ def main() -> None:
             logger.info("[run] Saving %d new profile vector(s) to sheet cache...", len(new_vectors))
             save_profile_vectors(profile_vectors, config, logger)
         else:
-            logger.info("[run] All profile vectors loaded from cache — no Apify call needed.")
+            logger.info("[run] All profile vectors loaded from cache — no BeReach call needed.")
 
         # Step 2 — Load cross-run dedup index from Google Sheet
         logger.info("[run] Loading dedup index (cross-run deduplication)...")
@@ -143,14 +156,8 @@ def main() -> None:
             len(seen_urls_global), len(seen_hashes_global),
         )
 
-        # Step 3 — Scrape via Apify (disabled — kept for future re-enablement)
-        # logger.info("[run] Starting Apify scraping...")
-        # raw_posts = scrape_all_countries(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global)
-        # logger.info("[run] Apify scraping complete — %d raw posts collected.", len(raw_posts))
+        # Step 3 — BeReach scraper
         raw_posts = []
-        logger.info("[run] Apify scraping DISABLED.")
-
-        # Step 3b — BeReach scraper (primary source)
         logger.info("[run] Starting BeReach scraping...")
         keyword_override = config.remote_keywords if run_mode == "job" else None
         bereach_posts = scrape_bereach(config, logger, seen_urls=seen_urls_global, seen_hashes=seen_hashes_global, keyword_override=keyword_override)
@@ -160,7 +167,7 @@ def main() -> None:
         logger.info("[run] Scraping complete — %d total raw posts collected.", len(raw_posts))
 
         if not raw_posts:
-            logger.warning("[run] No posts scraped. Check Apify actor and keyword config.")
+            logger.warning("[run] No posts scraped. Check BeReach API and keyword config.")
 
         # Step 3 — Score (load past user feedback to inject into Claude prompt)
         logger.info("[run] Loading user feedback examples from sheet...")

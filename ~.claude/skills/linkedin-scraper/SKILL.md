@@ -2,9 +2,8 @@
 
 name: linkedin-scraper
 
-description: Scrapes LinkedIn posts mentioning freelance missions using the BeReach API (primary)
-  or Apify (secondary, currently disabled). Invoked at the start of each daily run.
-  Returns a list of raw post dicts.
+description: Scrapes LinkedIn posts mentioning freelance missions using the BeReach API.
+  Invoked at the start of each daily run. Returns a list of raw post dicts.
 
 ---
 
@@ -36,15 +35,6 @@ The active scraper uses the BeReach API (`https://api.berea.ch/search/linkedin/p
 
 
 
-\## Secondary Scraper — Apify (`scraper/linkedin_scraper.py`)
-
-Implemented but **disabled in `run.py`** (kept for future re-enablement if BeReach quota is exceeded).
-
-When enabled, it triggers the `apimaestro/linkedin-posts-search-scraper-no-cookies` Apify actor for
-each `(keyword, country)` pair, polls until `SUCCEEDED`, and returns normalized `RawPost` dicts.
-
-
-
 \## Cross-Run Deduplication
 
 Both scrapers accept `seen_urls` and `seen_hashes` sets (pre-loaded from the Dedup_Index sheet tab
@@ -63,7 +53,5 @@ Each post normalized to: `post_url`, `author_name`, `author_title`, `author_prof
 
 \## Environment Variables Required
 
-\- `BEREACH_API_TOKEN`: BeReach API token (primary scraper)
-
-\- `APIFY_API_TOKEN`: Apify personal API token (secondary scraper, disabled)
+\- `BEREACH_API_TOKEN`: BeReach API token (post scraping + profile fetching)
 

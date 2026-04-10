@@ -28,9 +28,9 @@ from bs4 import BeautifulSoup
 from config.config import AppConfig
 from scraper.linkedin_scraper import RawPost
 
-# Apify actor for LinkedIn profile scraping (no cookies required)
-_APIFY_PROFILE_ACTOR_ID = "apimaestro/linkedin-profile-batch-scraper-no-cookies-required"
-_PROFILE_ACTOR_TIMEOUT_SECS = 120
+# BeReach API endpoint for LinkedIn profile fetching
+_BEREACH_PROFILE_ENDPOINT = "https://api.berea.ch/visit/linkedin/profile"
+_PROFILE_REQUEST_TIMEOUT = 30
 
 # Claude model for scoring — fast and cost-efficient
 _CLAUDE_MODEL = "claude-haiku-4-5-20251001"
@@ -172,23 +172,29 @@ def _build_calibration_table(feedback_examples: List[Dict[str, str]]) -> str:
     )
     return "\n".join(lines) + "\n\n"
 
-# Consultant domain expertise — injected into every scoring prompt
-# to give Claude explicit context before reading the profile vector.
+# Consultant context — injected into every scoring prompt.
+# Generic: Claude infers the consultant's domains from their profile vector.
 _CONSULTANT_PERSONA = """## Consultant Context:
-This consultant is a senior IT freelancer actively seeking missions in France and Morocco.
+This consultant is an experienced freelancer actively seeking missions.
 
-His core expertise domains — missions in these areas should score >= 60 if the profile confirms:
-  1. PMO / Project Management / Chef de projet SI / Pilotage de projet / MOE / MOA / AMOA
-  2. Service Delivery Manager / SDM / Delivery Manager / Responsable service client IT
-  3. Incident Manager / Major Incident Manager / Gestion des incidents majeurs / War room
-  4. ITSM / Run Manager / MCO / Maintien en condition opérationnelle / TMA / Exploitation IT
-  5. Business Analyst / BA / Analyste fonctionnel / Référent fonctionnel / AMOA
-  6. Product Owner / PO / Responsable produit / Backlog management
+SCORING PHILOSOPHY — read the profile vector carefully before scoring:
+- Score based ENTIRELY on the profile vector provided. Infer core expertise from job titles,
+  skills, certifications, and experience listed in the profile.
+- Missions strongly aligned with the consultant's demonstrated domain → score 60–100.
+- Missions requiring skills entirely absent from the profile → score 0–30.
+- When in doubt, favor a higher score: 50 means "worth reviewing", not "perfect match required".
+- Do NOT penalize for skills the profile does not explicitly mention if the broader domain matches.
 
-Out-of-scope domains — missions outside these areas should score <= 30 unless strong overlap:
-  - Software development (Dev, DevOps, Data Engineering, Data Science, Design, Cybersecurity)
-  - Infrastructure / Sysadmin / Network (unless combined with a management or coordination role)
-  - Pure technical roles without management or functional dimension"""
+OUT-OF-SCOPE PATTERN (apply when profile is clearly management/functional):
+- Pure technical implementation roles (Dev, DevOps, Data Engineering, Infra/Sysadmin/Network)
+  without a management or coordination dimension → score <= 30 unless the profile explicitly
+  lists that technical skill.
+
+MIXED DOMAIN RULE — when a post combines the consultant's core domain WITH a non-core domain:
+Score based on the HIGHEST-MATCHING component, not the average.
+Example: if profile shows project management strength, score the PM match (e.g. 72) and ignore
+an unrelated secondary skill requirement (e.g. GenAI = 20) → final score 72.
+Rationale: the consultant applies for the component they are qualified for."""
 
 
 class EnrichedPost(dict):
@@ -220,11 +226,11 @@ def fetch_profile_vectors(
     Build profile vectors for all profiles in config.
 
     For each profile URL already present in `cached`, re-uses the stored
-    vector without calling Apify. For missing profiles, calls the Apify
-    actor and falls back to HTTP scrape if Apify fails.
+    vector without calling BeReach. For missing profiles, calls the BeReach
+    profile endpoint and falls back to HTTP scrape if BeReach fails.
 
     Args:
-        config: Application configuration (provides linkedin_profiles + apify_api_token).
+        config: Application configuration (provides linkedin_profiles + bereach_api_token).
         logger: Logger instance.
         cached: Optional dict mapping URL → vector text already loaded from cache.
 
@@ -248,15 +254,15 @@ def fetch_profile_vectors(
             result[url] = {"name": name, "vector": cached[url]}
             continue
 
-        # Not cached — fetch via Apify
-        logger.info("[matcher] Profile '%s' not cached — fetching via Apify...", name)
-        apify_data = _fetch_profile_via_apify(config.apify_api_token, url, logger)
-        if apify_data:
-            vector = _build_profile_vector_from_apify(apify_data)
-            logger.info("[matcher] Profile '%s' fetched via Apify (%d chars).", name, len(vector))
+        # Not cached — fetch via BeReach
+        logger.info("[matcher] Profile '%s' not cached — fetching via BeReach...", name)
+        bereach_data = _fetch_profile_via_bereach(config.bereach_api_token, url, logger)
+        if bereach_data:
+            vector = _build_profile_vector_from_bereach(bereach_data)
+            logger.info("[matcher] Profile '%s' fetched via BeReach (%d chars).", name, len(vector))
         else:
             logger.warning(
-                "[matcher] Apify fetch failed for '%s' — falling back to HTTP scrape.", name
+                "[matcher] BeReach fetch failed for '%s' — falling back to HTTP scrape.", name
             )
             html = _fetch_linkedin_profile(url, logger)
             vector = _build_profile_vector(html)
@@ -414,136 +420,133 @@ def score_posts(
 
 
 
-def _fetch_profile_via_apify(
-    apify_api_token: str,
+def _fetch_profile_via_bereach(
+    bereach_api_token: str,
     profile_url: str,
     logger: logging.Logger,
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetch a LinkedIn profile's structured data via the Apify actor
-    apimaestro/linkedin-profile-batch-scraper-no-cookies-required.
+    Fetch a LinkedIn profile's data via the BeReach API.
 
-    Blocks until the run completes (SUCCEEDED) or times out (120s).
-    On any failure, logs a warning and returns None so the caller can fall back.
+    POST https://api.berea.ch/visit/linkedin/profile
+
+    On any failure, logs a warning and returns None so the caller can fall back
+    to the HTTP scrape method.
 
     Args:
-        apify_api_token: Apify API token.
+        bereach_api_token: BeReach API token.
         profile_url: Full LinkedIn profile URL.
         logger: Logger instance.
 
     Returns:
-        First item from the Apify dataset dict, or None on failure.
+        Response JSON dict from BeReach, or None on failure.
     """
-    try:
-        from apify_client import ApifyClient  # not installed while Apify is disabled
-    except ImportError as exc:
-        logger.warning("[matcher] apify_client not installed — profile fetch unavailable: %s", exc)
-        return None
-
-    client = ApifyClient(apify_api_token)
-    run_input = {"profileUrls": [profile_url]}
+    headers = {
+        "Authorization": f"Bearer {bereach_api_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {"profileUrl": profile_url}
 
     try:
-        logger.debug("[matcher] Starting Apify profile actor — input: %s", run_input)
-        run = client.actor(_APIFY_PROFILE_ACTOR_ID).call(
-            run_input=run_input,
-            timeout_secs=_PROFILE_ACTOR_TIMEOUT_SECS,
+        logger.debug("[matcher] Fetching profile via BeReach: %s", profile_url)
+        resp = requests.post(
+            _BEREACH_PROFILE_ENDPOINT,
+            json=payload,
+            headers=headers,
+            timeout=_PROFILE_REQUEST_TIMEOUT,
         )
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.exceptions.HTTPError as exc:
+        logger.warning(
+            "[matcher] BeReach profile fetch HTTP error (%s): %s", profile_url, exc
+        )
+        return None
     except Exception as exc:
         logger.warning(
-            "[matcher] Apify profile actor call failed (%s): %s", profile_url, exc
+            "[matcher] BeReach profile fetch failed (%s): %s", profile_url, exc
         )
         return None
 
-    if run is None or run.get("status") != "SUCCEEDED":
-        status = run.get("status") if run else "None"
-        logger.warning(
-            "[matcher] Apify profile actor did not succeed (status=%s, url=%s)", status, profile_url
-        )
+    if not data:
+        logger.warning("[matcher] BeReach returned empty response for profile %s", profile_url)
         return None
 
-    dataset_id = run.get("defaultDatasetId")
-    if not dataset_id:
-        logger.warning("[matcher] No dataset ID returned for profile %s", profile_url)
-        return None
-
-    try:
-        items = client.dataset(dataset_id).list_items().items
-    except Exception as exc:
-        logger.error("[matcher] Failed to fetch profile dataset %s: %s", dataset_id, exc)
-        return None
-
-    if not items:
-        logger.warning("[matcher] Apify profile actor returned no items for %s", profile_url)
-        return None
-
-    logger.debug("[matcher] Apify profile actor returned %d item(s) for %s", len(items), profile_url)
-    return items[0]
+    logger.debug(
+        "[matcher] BeReach profile response keys: %s",
+        list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+    )
+    return data if isinstance(data, dict) else None
 
 
-def _build_profile_vector_from_apify(data: Dict[str, Any]) -> str:
+def _build_profile_vector_from_bereach(data: Dict[str, Any]) -> str:
     """
-    Build a plain-text profile vector from structured Apify profile data.
+    Build a plain-text profile vector from BeReach profile data.
 
-    Extracts name, headline, about text, job titles from experience,
-    skills, and certifications. Returns _FALLBACK_PROFILE if nothing useful
-    is found.
+    BeReach /visit/linkedin/profile returns: name, headline, company,
+    connectionDegree, profileUrl, and optionally location, about, experience,
+    skills. Extracts all available fields defensively.
+
+    Returns _FALLBACK_PROFILE if nothing useful is found.
 
     Args:
-        data: Profile item dict returned by the Apify actor.
+        data: Profile response dict from the BeReach API.
 
     Returns:
         Pipe-separated plain-text profile vector string.
     """
     parts: List[str] = []
 
-    # Basic info — may be nested under "basic_info" or flat at top level
-    basic = data.get("basic_info") or {}
-    if isinstance(basic, dict):
-        name = basic.get("fullname") or basic.get("name") or ""
-        headline = basic.get("headline") or basic.get("title") or ""
-        location = basic.get("location") or {}
-        if isinstance(location, dict):
-            loc_str = ", ".join(filter(None, [location.get("city"), location.get("country")]))
-        else:
-            loc_str = str(location) if location else ""
-    else:
-        # Flat structure fallback
-        name = data.get("fullname") or data.get("name") or ""
-        headline = data.get("headline") or data.get("title") or ""
-        loc_str = ""
+    # Name
+    name = (
+        data.get("name") or data.get("fullName") or data.get("fullname") or ""
+    )
+    if name:
+        parts.append(str(name))
 
-    for val in (name, headline, loc_str):
-        if val:
-            parts.append(val)
+    # Headline / title
+    headline = (
+        data.get("headline") or data.get("title") or data.get("jobTitle") or ""
+    )
+    if headline:
+        parts.append(str(headline))
 
-    # About / summary
-    for field in ("about", "summary", "description"):
-        val = (
-            data.get(field)
-            or (basic.get(field) if isinstance(basic, dict) else None)
-            or ""
-        )
-        if val and isinstance(val, str):
-            parts.append(val[:500])
-            break
+    # Location
+    location = data.get("location") or data.get("city") or ""
+    if isinstance(location, dict):
+        location = ", ".join(filter(None, [location.get("city"), location.get("country")]))
+    if location:
+        parts.append(str(location))
 
-    # Experience — extract job titles (+ company) for the first 5 roles
-    experience = data.get("experience") or []
+    # Current company
+    company = (
+        data.get("company") or data.get("currentCompany")
+        or data.get("companyName") or data.get("organization") or ""
+    )
+    if isinstance(company, dict):
+        company = company.get("name") or company.get("companyName") or ""
+    if company:
+        parts.append(str(company))
+
+    # About / summary (if returned)
+    about = data.get("about") or data.get("summary") or data.get("description") or ""
+    if about and isinstance(about, str):
+        parts.append(about[:500])
+
+    # Experience — extract job titles (+ company) if returned
+    experience = data.get("experience") or data.get("positions") or []
     if isinstance(experience, list):
         for exp in experience[:5]:
             if not isinstance(exp, dict):
                 continue
-            title = (
-                exp.get("title") or exp.get("role") or exp.get("position") or ""
-            )
-            company = (
+            title = exp.get("title") or exp.get("role") or exp.get("position") or ""
+            exp_company = (
                 exp.get("company") or exp.get("companyName") or exp.get("organization") or ""
             )
             if title:
-                parts.append(f"{title}" + (f" at {company}" if company else ""))
+                parts.append(str(title) + (f" at {exp_company}" if exp_company else ""))
 
-    # Skills
+    # Skills (if returned)
     skills = data.get("skills") or []
     if isinstance(skills, list):
         skill_names = []
@@ -556,20 +559,6 @@ def _build_profile_vector_from_apify(data: Dict[str, Any]) -> str:
                 skill_names.append(sk)
         if skill_names:
             parts.append("Skills: " + ", ".join(skill_names))
-
-    # Certifications
-    certs = data.get("certifications") or data.get("certificates") or []
-    if isinstance(certs, list):
-        cert_names = []
-        for c in certs[:5]:
-            if isinstance(c, dict):
-                cert_name = c.get("name") or c.get("title") or ""
-                if cert_name:
-                    cert_names.append(cert_name)
-            elif isinstance(c, str) and c:
-                cert_names.append(c)
-        if cert_names:
-            parts.append("Certifications: " + ", ".join(cert_names))
 
     if not parts:
         return _FALLBACK_PROFILE
@@ -1007,11 +996,11 @@ domain but uses slightly different vocabulary — favor the higher score band.
 A score of 50 means "worth reviewing by the consultant", not "perfect match required".
 Do NOT penalize for skills the profile does not mention explicitly if the broader domain matches.
 
-MIXED DOMAIN RULE — when a post combines Mohamed's core domain WITH a non-core domain:
+MIXED DOMAIN RULE — when a post combines the consultant's core domain WITH a non-core domain:
 Score based on the HIGHEST-MATCHING component, not the average.
 Example: "Directeur de projet + AMOA + GenAI/ML" → PMO/AMOA = 72, GenAI = 20 → score 72.
 Example: "Gouvernance SSI + RSSI RUN + ITSM" → RUN/ITSM = 78, SSI governance = 40 → score 78.
-Rationale: Mohamed applies for the project management component even if he lacks a secondary skill.
+Rationale: the consultant applies for the component they are qualified for, not the full stack.
 
 {geo_rule_section}
 

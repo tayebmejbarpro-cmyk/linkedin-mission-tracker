@@ -27,7 +27,7 @@ description: Reads config from Google Sheets, loads cross-run dedup index, write
    (keywords, target countries, min score, etc.) — allows non-code config changes from the sheet.
 
 2\. **Profile cache** (`load_profile_vectors()`): read `Profils_Cache` tab. Returns dict of
-   `{name: vector_string}`. Used by `profile_matcher.fetch_profile_vectors()` to skip Apify calls.
+   `{name: vector_string}`. Used by `profile_matcher.fetch_profile_vectors()` to skip BeReach profile calls.
 
 3\. **Dedup index** (`load_seen_posts_all_tabs()`): read `Dedup_Index` tab (columns: post_url,
    text_hash). Returns two sets passed to the scraper for cross-run deduplication.
