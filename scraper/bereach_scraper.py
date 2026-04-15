@@ -29,7 +29,7 @@ from scraper.linkedin_scraper import (
 )
 
 # BeReach API base URL and endpoint
-_BASE_URL = "https://api.berea.ch"
+_BASE_URL = "https://api.bereach.ai"
 _ENDPOINT = "/search/linkedin/posts"
 
 # Results per page (BeReach max is 50)
