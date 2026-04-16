@@ -1,30 +1,33 @@
 {
   "LINKEDIN_PROFILES": [
-    {"name": "Tayeb Mejbar", "url": "https://www.linkedin.com/in/tayeb-mejbar/"}
+    {
+      "name": "Tayeb Mejbar",
+      "url": "https://www.linkedin.com/in/tayeb-mejbar/"
+    }
   ],
   "TARGET_COUNTRIES": ["France"],
   "SEARCH_KEYWORDS": [
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("contrôle permanent" OR "SOX")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("ITGC" OR "ITAC")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("plan de contrôle" OR "contrôle permanent")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("matrice de contrôles" OR "cartographie des risques")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("gouvernance IT" OR "IT governance")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("control framework" OR "contrôle interne")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("RGPD" OR "GDPR")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("AI Act" OR "DORA")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("NIS2" OR "cybersécurité")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("analyse d'impact" OR "DPIA")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ( "risques fournisseurs" OR "TPRM")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("BCBS 239")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("LPM" OR "PSD2")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("audit interne" OR "audit IT")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("audit SOX" OR "audit blanc")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("mock audit" OR "préparation audit")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("remédiation audit")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("coordination audit" OR "IT audit")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("contrôle continu" OR "testing contrôles")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("financial audit" OR "ISAE3402")"
-    "("mission" OR "besoin" OR "offre") AND ("freelance" OR "tjm" OR "Indépendant") AND ("SOC1" OR "SOC2")"
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"contrôle permanent\" OR \"SOX\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"ITGC\" OR \"ITAC\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"plan de contrôle\" OR \"contrôle permanent\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"matrice de contrôles\" OR \"cartographie des risques\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"gouvernance IT\" OR \"IT governance\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"control framework\" OR \"contrôle interne\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"RGPD\" OR \"GDPR\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"AI Act\" OR \"DORA\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"NIS2\" OR \"cybersécurité\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"analyse d'impact\" OR \"DPIA\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"risques fournisseurs\" OR \"TPRM\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"BCBS 239\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"LPM\" OR \"PSD2\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"audit interne\" OR \"audit IT\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"audit SOX\" OR \"audit blanc\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"mock audit\" OR \"préparation audit\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"remédiation audit\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"coordination audit\" OR \"IT audit\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"contrôle continu\" OR \"testing contrôles\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"financial audit\" OR \"ISAE3402\")",
+    "(\"mission\" OR \"besoin\" OR \"offre\") AND (\"freelance\" OR \"tjm\" OR \"indépendant\") AND (\"SOC1\" OR \"SOC2\")"
   ],
   "MIN_MATCH_SCORE": 40,
   "MAX_POSTS_PER_COUNTRY": 50,
